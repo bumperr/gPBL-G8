@@ -1,0 +1,219 @@
+# Home Assistant Configuration for Elder Care MQTT Integration
+# Add this to your configuration.yaml
+
+# MQTT Broker Configuration
+mqtt:
+  broker: localhost  # Your MQTT broker IP
+  port: 1883
+  username: homeassistant  # Optional
+  password: your_password  # Optional
+  discovery: true
+  discovery_prefix: homeassistant
+
+# Elder Care Sensors
+sensor:
+  # Health Metrics
+  - platform: mqtt
+    name: "Elder Heart Rate"
+    state_topic: "eldercare/health/heart_rate"
+    value_template: "{{ value_json.value }}"
+    unit_of_measurement: "bpm"
+    json_attributes_topic: "eldercare/health/heart_rate"
+    json_attributes_template: "{{ value_json | tojson }}"
+
+  - platform: mqtt
+    name: "Elder Blood Pressure"
+    state_topic: "eldercare/health/blood_pressure"
+    value_template: "{{ value_json.value }}"
+    unit_of_measurement: "mmHg"
+    json_attributes_topic: "eldercare/health/blood_pressure"
+
+  # Status Sensors
+  - platform: mqtt
+    name: "Elder Activity Status"
+    state_topic: "eldercare/status/+/activity"
+    value_template: "{{ value_json.status_value }}"
+    json_attributes_topic: "eldercare/status/+/activity"
+
+  - platform: mqtt
+    name: "Elder Location"
+    state_topic: "eldercare/status/+/location"
+    value_template: "{{ value_json.status_value }}"
+
+# Binary Sensors for Emergency Detection
+binary_sensor:
+  - platform: mqtt
+    name: "Emergency Alert"
+    state_topic: "eldercare/emergency/+"
+    value_template: >
+      {% if value_json.severity in ['critical', 'high'] %}
+        ON
+      {% else %}
+        OFF
+      {% endif %}
+    json_attributes_topic: "eldercare/emergency/+"
+    device_class: safety
+
+# Lights Control (responds to AI commands)
+light:
+  - platform: mqtt
+    name: "Living Room Light"
+    command_topic: "eldercare/commands/lights/turn_on"
+    state_topic: "eldercare/responses/lights/elder_name"
+    brightness_command_topic: "eldercare/commands/lights/set_brightness"
+    brightness_state_topic: "eldercare/responses/lights/elder_name"
+    payload_on: '{"action": "turn_on"}'
+    payload_off: '{"action": "turn_off"}'
+    brightness_value_template: "{{ value_json.parameters.brightness | default(255) }}"
+
+# Climate Control
+climate:
+  - platform: mqtt
+    name: "Elder Thermostat"
+    current_temperature_topic: "eldercare/health/temperature"
+    temperature_command_topic: "eldercare/commands/thermostat/set_temperature"
+    temperature_state_topic: "eldercare/responses/thermostat/elder_name"
+    modes:
+      - "heat"
+      - "cool"
+      - "auto"
+      - "off"
+
+# Lock Control
+lock:
+  - platform: mqtt
+    name: "Front Door Lock"
+    command_topic: "eldercare/commands/locks/lock"
+    state_topic: "eldercare/responses/locks/elder_name"
+    payload_lock: '{"action": "lock"}'
+    payload_unlock: '{"action": "unlock"}'
+
+# Automations for Elder Care
+automation:
+  # Respond to AI Commands
+  - alias: "Process Elder Care Light Command"
+    trigger:
+      platform: mqtt
+      topic: "eldercare/commands/lights/+"
+    condition:
+      condition: template
+      value_template: "{{ trigger.payload_json.source == 'ai_assistant' }}"
+    action:
+      - service: light.turn_on
+        target:
+          entity_id: >
+            {% if trigger.payload_json.room == 'living_room' %}
+              light.living_room_light
+            {% elif trigger.payload_json.room == 'bedroom' %}
+              light.bedroom_light
+            {% else %}
+              light.living_room_light
+            {% endif %}
+        data:
+          brightness: "{{ trigger.payload_json.parameters.brightness | default(255) }}"
+      # Send response back to AI
+      - service: mqtt.publish
+        data:
+          topic: "eldercare/responses/lights/{{ trigger.payload_json.elder_name }}"
+          payload: >
+            {
+              "status": "success",
+              "action": "{{ trigger.payload_json.action }}",
+              "timestamp": "{{ now().isoformat() }}"
+            }
+
+  # Emergency Alert Automation
+  - alias: "Emergency Alert Notification"
+    trigger:
+      platform: mqtt
+      topic: "eldercare/emergency/+"
+    condition:
+      condition: template
+      value_template: "{{ trigger.payload_json.severity in ['critical', 'high'] }}"
+    action:
+      # Send notification to all devices
+      - service: notify.all_devices
+        data:
+          title: "🚨 ELDER CARE EMERGENCY"
+          message: >
+            {{ trigger.payload_json.elder_name }}: {{ trigger.payload_json.message }}
+            Location: {{ trigger.payload_json.location }}
+            Severity: {{ trigger.payload_json.severity }}
+      # Turn on all lights
+      - service: light.turn_on
+        target:
+          entity_id: all
+        data:
+          brightness: 255
+      # Send to emergency services if critical
+      - condition: template
+        value_template: "{{ trigger.payload_json.severity == 'critical' }}"
+      - service: notify.emergency_services
+        data:
+          message: "Critical emergency at elder care location"
+
+  # Health Monitoring
+  - alias: "Health Alert"
+    trigger:
+      - platform: mqtt
+        topic: "eldercare/health/heart_rate"
+      - platform: mqtt
+        topic: "eldercare/health/blood_pressure"
+    condition:
+      condition: template
+      value_template: >
+        {% if trigger.topic.endswith('heart_rate') %}
+          {{ trigger.payload_json.value | int > 100 or trigger.payload_json.value | int < 60 }}
+        {% elif trigger.topic.endswith('blood_pressure') %}
+          {{ trigger.payload_json.value | int > 140 }}
+        {% endif %}
+    action:
+      - service: notify.caregivers
+        data:
+          title: "Health Alert"
+          message: >
+            {{ trigger.payload_json.elder_name }} - {{ trigger.payload_json.metric_type }}: {{ trigger.payload_json.value }}{{ trigger.payload_json.unit }}
+
+# Notifications
+notify:
+  - name: caregivers
+    platform: group
+    services:
+      - service: mobile_app_caregiver_phone
+      - service: telegram_bot
+
+# Dashboards
+lovelace:
+  mode: yaml
+  resources:
+    - url: /local/elder-care-card.js
+      type: module
+
+# Elder Care Dashboard
+views:
+  - title: "Elder Care Monitor"
+    cards:
+      - type: entities
+        title: "Health Status"
+        entities:
+          - sensor.elder_heart_rate
+          - sensor.elder_blood_pressure
+          - sensor.elder_activity_status
+          - sensor.elder_location
+      
+      - type: history-graph
+        title: "Health Trends"
+        entities:
+          - sensor.elder_heart_rate
+          - sensor.elder_blood_pressure
+        hours_to_show: 24
+      
+      - type: conditional
+        conditions:
+          - entity: binary_sensor.emergency_alert
+            state: "on"
+        card:
+          type: alert
+          entity: binary_sensor.emergency_alert
+          name: "EMERGENCY ALERT"
+          state: "on"
