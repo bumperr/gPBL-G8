@@ -1,0 +1,315 @@
+/* Global Styles for Elder Care Mobile Web App */
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f5f7fa;
+  line-height: 1.6;
+}
+
+/* Mobile-first responsive design */
+@media (max-width: 600px) {
+  body {
+    font-size: 16px; /* Prevent zoom on iOS */
+  }
+}
+
+/* Accessibility improvements */
+button, input, select, textarea {
+  font-size: 16px; /* Prevent zoom on iOS */
+  font-family: inherit;
+}
+
+/* Focus styles for accessibility */
+button:focus,
+input:focus,
+select:focus,
+textarea:focus,
+[role="button"]:focus {
+  outline: 2px solid #2196F3;
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .MuiButton-root {
+    border: 2px solid currentColor;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Touch-friendly button sizes */
+.MuiButton-root,
+.MuiIconButton-root,
+.MuiFab-root {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Improve text readability */
+.MuiTypography-root {
+  color: #2d3748;
+}
+
+.MuiTypography-body1,
+.MuiTypography-body2 {
+  line-height: 1.6;
+}
+
+/* Large text for elders */
+.elder-interface .MuiTypography-h6 {
+  font-size: 1.5rem;
+}
+
+.elder-interface .MuiTypography-body1 {
+  font-size: 1.125rem;
+}
+
+.elder-interface .MuiButton-root {
+  font-size: 1.125rem;
+  padding: 16px 24px;
+}
+
+/* Card hover effects */
+.MuiCard-root {
+  transition: all 0.2s ease-in-out;
+}
+
+.MuiCard-root:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Emergency button styles */
+.emergency-button {
+  background: linear-gradient(45deg, #f44336, #e53935) !important;
+  color: white !important;
+  font-weight: bold !important;
+  box-shadow: 0 4px 20px rgba(244, 67, 54, 0.4) !important;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 4px 20px rgba(244, 67, 54, 0.4);
+  }
+  50% {
+    box-shadow: 0 4px 25px rgba(244, 67, 54, 0.6);
+    transform: scale(1.05);
+  }
+  100% {
+    box-shadow: 0 4px 20px rgba(244, 67, 54, 0.4);
+  }
+}
+
+/* Voice recording animation */
+.recording-animation {
+  animation: recording-pulse 1s infinite alternate;
+}
+
+@keyframes recording-pulse {
+  0% {
+    background-color: #f44336;
+    transform: scale(1);
+  }
+  100% {
+    background-color: #d32f2f;
+    transform: scale(1.1);
+  }
+}
+
+/* Loading spinner */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+/* Status indicators */
+.status-safe {
+  color: #4CAF50 !important;
+}
+
+.status-warning {
+  color: #FF9800 !important;
+}
+
+.status-error {
+  color: #f44336 !important;
+}
+
+/* Connection status */
+.connection-indicator {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.connection-connected {
+  background: #4CAF50;
+  color: white;
+}
+
+.connection-disconnected {
+  background: #f44336;
+  color: white;
+}
+
+/* Responsive grid adjustments */
+@media (max-width: 960px) {
+  .MuiContainer-root {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  
+  .MuiGrid-container {
+    margin: 0;
+    width: 100%;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Print styles */
+@media print {
+  .MuiFab-root,
+  .MuiAppBar-root,
+  button {
+    display: none !important;
+  }
+  
+  .MuiPaper-root {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+  }
+}
+
+/* Dark mode support (if needed later) */
+@media (prefers-color-scheme: dark) {
+  /* Dark mode styles would go here */
+}
+
+/* Voice assistant specific styles */
+.voice-assistant-container {
+  background: linear-gradient(145deg, #f0f4f8, #e2e8f0);
+  border-radius: 16px;
+  padding: 24px;
+  margin: 16px 0;
+}
+
+.voice-button-active {
+  background: linear-gradient(45deg, #f44336, #e53935) !important;
+  animation: recording-pulse 1s infinite alternate;
+}
+
+/* Health status indicators */
+.health-normal {
+  color: #4CAF50 !important;
+}
+
+.health-elevated {
+  color: #FF9800 !important;
+}
+
+.health-critical {
+  color: #f44336 !important;
+}
+
+/* Alert priorities */
+.alert-low {
+  border-left: 4px solid #2196F3;
+}
+
+.alert-medium {
+  border-left: 4px solid #FF9800;
+}
+
+.alert-high {
+  border-left: 4px solid #f44336;
+}
+
+/* Mobile optimizations */
+@media (max-width: 600px) {
+  .mobile-full-width {
+    width: 100% !important;
+    margin: 0 !important;
+  }
+  
+  .mobile-hide {
+    display: none !important;
+  }
+  
+  .mobile-text-center {
+    text-align: center !important;
+  }
+  
+  .mobile-stack {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  
+  .mobile-stack > * {
+    margin-bottom: 8px !important;
+  }
+}
+
+/* Tablet optimizations */
+@media (min-width: 601px) and (max-width: 960px) {
+  .tablet-grid-2 {
+    width: 50% !important;
+  }
+}
+
+/* Large screen optimizations */
+@media (min-width: 1280px) {
+  .desktop-max-width {
+    max-width: 1200px !important;
+    margin: 0 auto !important;
+  }
+}
