@@ -347,4 +347,6 @@ async def get_mqtt_topics():
             "node_red": "Create flows subscribing to eldercare/# for all messages",
             "openhab": "Configure MQTT binding with eldercare topic prefix"
         }
-    }
+    } # type: ignore
+
+

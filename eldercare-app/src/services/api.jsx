@@ -67,6 +67,20 @@ export const apiService = {
     }
   },
 
+  // Text assistance for elders with mental health focus
+  async processElderText(message, elderInfo) {
+    try {
+      const response = await api.post('/eldercare/text-assistance', {
+        message,
+        elder_info: elderInfo
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Text assistance failed:', error);
+      throw error;
+    }
+  },
+
   // Send MQTT message
   async sendMQTTMessage(topic, message) {
     try {

@@ -11,7 +11,9 @@ import {
   Paper,
   Avatar,
   Divider,
-  Fab
+  Fab,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Warning,
@@ -23,15 +25,20 @@ import {
   Brightness6,
   Thermostat,
   Lock,
-  LockOpen
+  LockOpen,
+  Mic,
+  Chat
 } from '@mui/icons-material';
 import AudioRecorder from '../components/AudioRecorder';
+import TextChat from '../components/TextChat';
 import apiService from '../services/api';
 
 const ElderInterface = ({ elderInfo, onEmergency }) => {
   const [messages, setMessages] = useState([]);
   const [serverStatus, setServerStatus] = useState('disconnected');
   const [lastResponse, setLastResponse] = useState('');
+  const [activeTab, setActiveTab] = useState(0);
+  const [intentDetections, setIntentDetections] = useState([]);
 
   // Check server health on component mount
   useEffect(() => {
@@ -112,6 +119,23 @@ const ElderInterface = ({ elderInfo, onEmergency }) => {
     }
   };
 
+  const handleIntentDetected = (intentData) => {
+    // Handle detected intent from text chat
+    setIntentDetections(prev => [
+      {
+        id: Date.now(),
+        ...intentData,
+        timestamp: new Date()
+      },
+      ...prev.slice(0, 9) // Keep last 10 detections
+    ]);
+
+    // Handle emergency from text chat
+    if (intentData.is_emergency && onEmergency) {
+      onEmergency(`Emergency detected via text: ${intentData.elder_message}`);
+    }
+  };
+
   const quickActions = [
     {
       label: 'Turn on Lights',
@@ -176,11 +200,42 @@ const ElderInterface = ({ elderInfo, onEmergency }) => {
         </Alert>
       )}
 
-      {/* Voice Assistant */}
-      <AudioRecorder
-        onMessageSent={handleMessageSent}
-        elderInfo={elderInfo}
-      />
+      {/* Communication Tabs */}
+      <Paper elevation={2} sx={{ mb: 3, borderRadius: 3 }}>
+        <Tabs 
+          value={activeTab} 
+          onChange={(e, newValue) => setActiveTab(newValue)}
+          variant="fullWidth"
+          sx={{ borderBottom: 1, borderColor: 'divider' }}
+        >
+          <Tab 
+            icon={<Mic />} 
+            label="Voice Chat" 
+            sx={{ fontSize: '1.1rem', fontWeight: 'bold' }}
+          />
+          <Tab 
+            icon={<Chat />} 
+            label="Text Chat" 
+            sx={{ fontSize: '1.1rem', fontWeight: 'bold' }}
+          />
+        </Tabs>
+
+        <Box sx={{ p: 3 }}>
+          {activeTab === 0 && (
+            <AudioRecorder
+              onMessageSent={handleMessageSent}
+              elderInfo={elderInfo}
+            />
+          )}
+          
+          {activeTab === 1 && (
+            <TextChat
+              elderInfo={elderInfo}
+              onIntentDetected={handleIntentDetected}
+            />
+          )}
+        </Box>
+      </Paper>
 
       {/* Last AI Response */}
       {lastResponse && (
@@ -235,6 +290,48 @@ const ElderInterface = ({ elderInfo, onEmergency }) => {
           ))}
         </Grid>
       </Paper>
+
+      {/* Latest Intent Detections */}
+      {intentDetections.length > 0 && (
+        <Paper elevation={2} sx={{ p: 3, mb: 3, borderRadius: 3 }}>
+          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            🎯 AI Intent Detection & Actions
+          </Typography>
+          <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
+            {intentDetections.slice(0, 3).map((detection) => (
+              <Alert 
+                key={detection.id}
+                severity={
+                  detection.ai_response?.intent_detected === 'emergency' ? 'error' :
+                  detection.ai_response?.intent_detected === 'health_concern' ? 'warning' :
+                  detection.ai_response?.intent_detected === 'loneliness' ? 'info' : 'success'
+                }
+                sx={{ mb: 1, fontSize: '0.9rem' }}
+              >
+                <Box>
+                  <Typography variant="body2" fontWeight="bold">
+                    Intent: {detection.ai_response?.intent_detected?.toUpperCase().replace('_', ' ')} 
+                    {detection.ai_response?.confidence_score && 
+                      ` (${Math.round(detection.ai_response.confidence_score * 100)}% confidence)`
+                    }
+                  </Typography>
+                  {detection.ai_response?.suggested_action && (
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      <strong>Suggested Action:</strong> {detection.ai_response.suggested_action.function_name}
+                      {detection.ai_response.suggested_action.parameters && 
+                        ` with parameters: ${JSON.stringify(detection.ai_response.suggested_action.parameters)}`
+                      }
+                    </Typography>
+                  )}
+                  <Typography variant="caption" color="text.secondary">
+                    {detection.timestamp.toLocaleTimeString()}
+                  </Typography>
+                </Box>
+              </Alert>
+            ))}
+          </Box>
+        </Paper>
+      )}
 
       {/* Recent Messages */}
       {messages.length > 0 && (

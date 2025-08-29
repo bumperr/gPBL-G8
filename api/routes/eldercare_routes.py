@@ -90,6 +90,76 @@ async def voice_assistance(request: Dict[str, Any]):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Voice assistance failed: {str(e)}")
 
+@router.post("/text-assistance")
+async def text_assistance(request: Dict[str, Any]):
+    """Enhanced text assistance workflow for elders with mental health focus"""
+    try:
+        # Extract request data
+        message = request.get('message')
+        elder_info = request.get('elder_info', {})
+        
+        if not message:
+            raise HTTPException(status_code=400, detail="Message is required")
+        
+        # Process with enhanced AI service
+        ai_response = await ai_service.process_elder_text(message, elder_info)
+        
+        # Prepare response with enhanced data
+        response_data = {
+            "status": "success",
+            "message": message,
+            "ai_response": ai_response,
+            "timestamp": datetime.now().isoformat(),
+            "elder_info": elder_info
+        }
+        
+        # Handle emergency situations
+        if ai_response.get('is_emergency'):
+            emergency_data = {
+                "elder_name": elder_info.get('name', 'Unknown Elder'),
+                "message": f"Text emergency detected: {message}",
+                "severity": "high",
+                "location": elder_info.get('location', 'Unknown'),
+                "timestamp": datetime.now().isoformat(),
+                "intent_detected": ai_response.get('intent_detected'),
+                "suggested_action": ai_response.get('suggested_action')
+            }
+            
+            # Send MQTT emergency alert
+            if mqtt_service:
+                try:
+                    topic = f"eldercare/emergency/{elder_info.get('name', 'unknown').lower().replace(' ', '_')}"
+                    await mqtt_service.publish_message(topic, json.dumps(emergency_data))
+                    response_data["emergency_alert"] = emergency_data
+                    response_data["mqtt_sent"] = True
+                except Exception as mqtt_error:
+                    response_data["mqtt_error"] = str(mqtt_error)
+                    response_data["mqtt_sent"] = False
+        
+        # Log interaction for caregivers with mental health data
+        interaction_log = {
+            "type": "text_interaction",
+            "elder_name": elder_info.get('name', 'Unknown Elder'),
+            "message": message,
+            "ai_response": ai_response['response'],
+            "intent_detected": ai_response.get('intent_detected'),
+            "confidence_score": ai_response.get('confidence_score'),
+            "mental_health_assessment": ai_response.get('mental_health_assessment'),
+            "suggested_action": ai_response.get('suggested_action'),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        if mqtt_service:
+            try:
+                await mqtt_service.publish_message("elder/interactions", json.dumps(interaction_log))
+            except Exception as mqtt_error:
+                print(f"MQTT logging failed: {mqtt_error}")
+        
+        return response_data
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Text assistance failed: {str(e)}")
+
 @router.post("/manual-emergency")
 async def manual_emergency(request: EmergencyAlert):
     """Manually trigger emergency alert"""
