@@ -4,6 +4,11 @@
 
 This guide demonstrates how to integrate Arduino R4 WiFi with the Elder Care Assistant's MQTT system to receive commands and control IoT devices based on elder interactions from the UI.
 
+Hướng dẫn này trình bày cách tích hợp Arduino R4 WiFi với hệ thống MQTT của Trợ lý Chăm sóc Người cao tuổi để nhận lệnh và điều khiển các thiết bị IoT dựa trên tương tác của người cao tuổi từ giao diện người dùng.
+
+Japanese (日本語):
+このガイドでは、Arduino R4 WiFi を高齢者ケアアシスタントの MQTT システムと統合し、ユーザーインターフェースからの高齢者の操作に基づいてコマンドを受信し、IoT デバイスを制御する方法を説明します。
+
 ## Prerequisites
 
 ### Hardware
