@@ -10,13 +10,7 @@ export default defineConfig({
     port: 3000,
     open: true,
     host: true, // Allow external connections
-    allowedHosts: [
-      'localhost',
-      '127.0.0.1',
-      '6ec591968143.ngrok-free.app',
-      '.ngrok.io',
-      '.ngrok-free.app'
-    ]
+    allowedHosts: true // Allow all hosts
   },
   resolve: {
     alias: {
