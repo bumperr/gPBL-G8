@@ -23,21 +23,21 @@ import { Person, Dashboard, Warning } from '@mui/icons-material';
 import ElderInterface from './pages/ElderInterface';
 import CaregiverDashboard from './pages/CaregiverDashboard';
 
-// Create theme with accessibility and mobile-first approach
+// Create green theme for eldercare app
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#2196F3',
-      light: '#64B5F6',
-      dark: '#1976D2',
+      main: '#4caf50',
+      light: '#81c784',
+      dark: '#2e7d32',
     },
     secondary: {
-      main: '#FF9800',
-      light: '#FFB74D',
-      dark: '#F57C00',
+      main: '#66bb6a',
+      light: '#a5d6a7',
+      dark: '#388e3c',
     },
     background: {
-      default: '#f5f7fa',
+      default: '#f1f8e9',
       paper: '#ffffff',
     },
   },
@@ -102,102 +102,136 @@ const theme = createTheme({
   },
 });
 
-// Login/Setup Component
-const LoginSetup = ({ onUserSetup }) => {
-  const [userType, setUserType] = useState('');
-  const [userName, setUserName] = useState('');
-  const [userInfo, setUserInfo] = useState({});
-  const [error, setError] = useState('');
+// Simple Role Selection Component
+const RoleSelection = ({ onUserSetup }) => {
+  const [selectedRole, setSelectedRole] = useState('');
 
-  const handleSetup = () => {
-    if (!userType || !userName.trim()) {
-      setError('Please select user type and enter your name');
-      return;
-    }
-
+  const handleRoleSelect = (role) => {
     const userData = {
-      type: userType,
-      name: userName.trim(),
-      ...userInfo
+      type: role,
+      name: role === 'elder' ? 'John' : 'Sarah',
+      age: role === 'elder' ? 78 : undefined,
+      family_contact_name: role === 'elder' ? 'Sarah' : undefined,
+      family_phone: role === 'elder' ? '+6011468550' : undefined,
+      role: role === 'caregiver' ? 'Family Caregiver' : undefined,
+      elder_name: role === 'caregiver' ? 'John' : undefined
     };
 
     onUserSetup(userData);
   };
 
   return (
-    <Container maxWidth="sm" sx={{ py: 4 }}>
-      <Paper elevation={3} sx={{ p: 4, borderRadius: 3 }}>
-        <Typography variant="h4" align="center" gutterBottom>
-          Elder Care Assistant
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      <Paper 
+        elevation={8} 
+        sx={{ 
+          p: 6, 
+          borderRadius: 4,
+          background: 'linear-gradient(135deg, #e8f5e8 0%, #f1f8e9 100%)',
+          border: '3px solid #c8e6c9',
+          boxShadow: '0 12px 48px rgba(76, 175, 80, 0.3)',
+          textAlign: 'center'
+        }}
+      >
+        <Typography 
+          variant="h3" 
+          align="center" 
+          gutterBottom
+          sx={{ 
+            color: '#2e7d32',
+            fontWeight: 'bold',
+            mb: 2,
+            background: 'linear-gradient(135deg, #2e7d32 0%, #4caf50 100%)',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent'
+          }}
+        >
+          🌿 Elder Care Assistant
         </Typography>
-        <Typography variant="body1" align="center" color="text.secondary" sx={{ mb: 4 }}>
-          Please set up your profile to get started
+        <Typography 
+          variant="h6" 
+          align="center" 
+          sx={{ 
+            color: '#388e3c', 
+            mb: 6,
+            fontWeight: 500
+          }}
+        >
+          Choose your role to get started
         </Typography>
 
-        {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-
-        <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <FormControl fullWidth>
-            <InputLabel>I am a...</InputLabel>
-            <Select
-              value={userType}
-              label="I am a..."
-              onChange={(e) => setUserType(e.target.value)}
-              size="large"
-            >
-              <MenuItem value="elder">Elder (Senior)</MenuItem>
-              <MenuItem value="caregiver">Caregiver</MenuItem>
-            </Select>
-          </FormControl>
-
-          <TextField
-            fullWidth
-            label="Your Name"
-            value={userName}
-            onChange={(e) => setUserName(e.target.value)}
-            size="large"
-          />
-
-          {userType === 'elder' && (
-            <>
-              <TextField
-                fullWidth
-                label="Age (Optional)"
-                type="number"
-                value={userInfo.age || ''}
-                onChange={(e) => setUserInfo(prev => ({ ...prev, age: e.target.value }))}
-              />
-              <TextField
-                fullWidth
-                label="Emergency Contact (Optional)"
-                value={userInfo.emergencyContact || ''}
-                onChange={(e) => setUserInfo(prev => ({ ...prev, emergencyContact: e.target.value }))}
-              />
-            </>
-          )}
-
-          {userType === 'caregiver' && (
-            <TextField
-              fullWidth
-              label="Role/Organization (Optional)"
-              value={userInfo.role || ''}
-              onChange={(e) => setUserInfo(prev => ({ ...prev, role: e.target.value }))}
-            />
-          )}
-
-          <Button
-            variant="contained"
-            size="large"
-            onClick={handleSetup}
-            sx={{ mt: 2, py: 2 }}
-            startIcon={userType === 'elder' ? <Person /> : <Dashboard />}
+        <Box sx={{ display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Paper
+            elevation={4}
+            onClick={() => handleRoleSelect('elder')}
+            sx={{
+              p: 4,
+              borderRadius: 4,
+              cursor: 'pointer',
+              minWidth: 200,
+              background: 'linear-gradient(135deg, #4caf50 0%, #66bb6a 100%)',
+              color: 'white',
+              transition: 'all 0.3s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-8px) scale(1.05)',
+                boxShadow: '0 16px 32px rgba(76, 175, 80, 0.4)'
+              }
+            }}
           >
-            {userType === 'elder' ? 'Start Elder Interface' : 'Open Caregiver Dashboard'}
-          </Button>
+            <Person sx={{ fontSize: 64, mb: 2 }} />
+            <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>
+              Elder
+            </Typography>
+            <Typography variant="body1" sx={{ opacity: 0.9 }}>
+              John, 78 years old
+            </Typography>
+            <Typography variant="body2" sx={{ opacity: 0.8, mt: 1 }}>
+              Access AI companion, health monitoring, and smart home control
+            </Typography>
+          </Paper>
+
+          <Paper
+            elevation={4}
+            onClick={() => handleRoleSelect('caregiver')}
+            sx={{
+              p: 4,
+              borderRadius: 4,
+              cursor: 'pointer',
+              minWidth: 200,
+              background: 'linear-gradient(135deg, #66bb6a 0%, #81c784 100%)',
+              color: 'white',
+              transition: 'all 0.3s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-8px) scale(1.05)',
+                boxShadow: '0 16px 32px rgba(102, 187, 106, 0.4)'
+              }
+            }}
+          >
+            <Dashboard sx={{ fontSize: 64, mb: 2 }} />
+            <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>
+              Caregiver
+            </Typography>
+            <Typography variant="body1" sx={{ opacity: 0.9 }}>
+              Sarah (Family)
+            </Typography>
+            <Typography variant="body2" sx={{ opacity: 0.8, mt: 1 }}>
+              Monitor John's activities, health status, and emergency alerts
+            </Typography>
+          </Paper>
         </Box>
 
-        <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 4 }}>
-          This app connects to your smart home system and provides voice assistance for elder care
+        <Typography 
+          variant="body1" 
+          color="text.secondary" 
+          align="center" 
+          sx={{ 
+            mt: 6,
+            color: '#2e7d32',
+            fontStyle: 'italic'
+          }}
+        >
+          🏠 Smart home integration • 🤖 AI companion • 📱 Emergency alerts
         </Typography>
       </Paper>
     </Container>
@@ -268,9 +302,9 @@ function App() {
         <Box sx={{ 
           minHeight: '100vh', 
           backgroundColor: 'background.default',
-          backgroundImage: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+          backgroundImage: 'linear-gradient(135deg, #c8e6c9 0%, #e8f5e8 100%)'
         }}>
-          <LoginSetup onUserSetup={handleUserSetup} />
+          <RoleSelection onUserSetup={handleUserSetup} />
         </Box>
       </ThemeProvider>
     );
@@ -282,15 +316,55 @@ function App() {
       <Router>
         <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default' }}>
           {/* App Bar */}
-          <AppBar position="sticky" elevation={2}>
+          <AppBar position="sticky" elevation={2} sx={{ 
+            background: 'linear-gradient(135deg, #4caf50 0%, #66bb6a 100%)',
+            boxShadow: '0 4px 20px rgba(76, 175, 80, 0.3)'
+          }}>
             <Toolbar>
-              <Typography variant="h6" sx={{ flexGrow: 1 }}>
-                Elder Care Assistant
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                flexGrow: 1,
+                py: 1
+              }}>
+                <img 
+                  src="/logo.png" 
+                  alt="Elder Care Assistant" 
+                  style={{ 
+                    height: '50px',
+                    maxWidth: '200px',
+                    objectFit: 'contain',
+                    filter: 'brightness(1.1) contrast(1.1)'
+                  }}
+                />
+              </Box>
+              <Typography variant="body1" sx={{ 
+                mr: 2,
+                color: 'white',
+                fontWeight: 500,
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                px: 2,
+                py: 0.5,
+                borderRadius: 2,
+                backdropFilter: 'blur(10px)'
+              }}>
+                {user.name} ({user.type === 'elder' ? '👴 Elder' : '👩‍⚕️ Caregiver'})
               </Typography>
-              <Typography variant="body2" sx={{ mr: 2 }}>
-                {user.name} ({user.type})
-              </Typography>
-              <Button color="inherit" onClick={handleLogout}>
+              <Button 
+                color="inherit" 
+                onClick={handleLogout}
+                sx={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                    transform: 'scale(1.05)'
+                  },
+                  borderRadius: 2,
+                  px: 3,
+                  fontWeight: 'bold',
+                  transition: 'all 0.3s ease-in-out'
+                }}
+              >
                 Logout
               </Button>
             </Toolbar>

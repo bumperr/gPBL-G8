@@ -1,15 +1,72 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import speech_routes, chat_routes, mqtt_routes, eldercare_routes, camera_routes
+from contextlib import asynccontextmanager
+from api.routes import speech_routes, chat_routes, mqtt_routes, eldercare_routes, camera_routes, websocket_routes, devices_routes, analytics_routes
 from api.services.mqtt_service import MQTTService
 from api.services.speech_service import SpeechToTextService
 import asyncio
 
-# Initialize FastAPI app
+
+# Global services - Use network MQTT broker IP
+mqtt_service = MQTTService(broker="10.136.133.66", port=1883)
+speech_service = SpeechToTextService()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan event handler for startup and shutdown"""
+    # Startup
+    print("Starting Elder Care Speech Assistant API...")
+    
+    # Initialize MQTT service
+    try:
+        await mqtt_service.initialize()
+        print("MQTT service initialized")
+    except Exception as e:
+        print(f"MQTT service initialization failed: {e}")
+    
+    # Initialize speech recognition service
+    try:
+        await speech_service.initialize_whisper()
+        print("Speech recognition service initialized")
+    except Exception as e:
+        print(f"Speech recognition initialization failed: {e}")
+        
+    # Set global services for routes
+    speech_routes.mqtt_service = mqtt_service
+    eldercare_routes.mqtt_service = mqtt_service
+    mqtt_routes.mqtt_service = mqtt_service
+    
+    # Initialize WebSocket with MQTT service
+    from api.routes.websocket_routes import initialize_websocket_with_mqtt
+    initialize_websocket_with_mqtt(mqtt_service)
+    
+    # Initialize chat route services
+    try:
+        from api.routes.chat_routes import initialize_chat_services
+        await initialize_chat_services()
+        print("Chat route services initialized")
+    except Exception as e:
+        print(f"Chat route services initialization failed: {e}")
+    
+    print("Elder Care Speech Assistant API is ready!")
+    
+    yield
+    
+    # Shutdown
+    print("Shutting down Elder Care Speech Assistant API...")
+    
+    if mqtt_service:
+        mqtt_service.disconnect()
+        print("MQTT service disconnected")
+    
+    print("Elder Care Speech Assistant API shutdown complete")
+
+# Initialize FastAPI app with lifespan
 app = FastAPI(
     title="Elder Care Speech Assistant API",
     description="AI-powered speech-to-text eldercare assistant with MQTT integration",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan
 )
 
 # Add CORS middleware
@@ -21,53 +78,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global services
-mqtt_service = MQTTService()
-speech_service = SpeechToTextService()
-
 # Include routers
 app.include_router(eldercare_routes.router)
 app.include_router(speech_routes.router)
 app.include_router(chat_routes.router)
 app.include_router(mqtt_routes.router)
 app.include_router(camera_routes.router)
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup"""
-    print("Starting Elder Care Speech Assistant API...")
-    
-    # Initialize MQTT service
-    try:
-        await mqtt_service.initialize()
-        print("✓ MQTT service initialized")
-    except Exception as e:
-        print(f"⚠ MQTT service initialization failed: {e}")
-    
-    # Initialize speech recognition service
-    try:
-        await speech_service.initialize_whisper()
-        print("✓ Speech recognition service initialized")
-    except Exception as e:
-        print(f"⚠ Speech recognition initialization failed: {e}")
-        
-    # Set global services for routes
-    speech_routes.mqtt_service = mqtt_service
-    eldercare_routes.mqtt_service = mqtt_service
-    mqtt_routes.mqtt_service = mqtt_service
-    
-    print("🚀 Elder Care Speech Assistant API is ready!")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup services on shutdown"""
-    print("Shutting down Elder Care Speech Assistant API...")
-    
-    if mqtt_service:
-        mqtt_service.disconnect()
-        print("✓ MQTT service disconnected")
-    
-    print("👋 Elder Care Speech Assistant API shutdown complete")
+app.include_router(websocket_routes.router)
+app.include_router(devices_routes.router)
+app.include_router(analytics_routes.router)
 
 @app.get("/")
 async def root():
@@ -131,4 +150,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

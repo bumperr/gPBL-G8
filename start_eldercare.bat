@@ -21,7 +21,17 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-echo ✓ Python and Node.js detected
+:: Check if Ollama is installed
+ollama --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo ERROR: Ollama is not installed or not in PATH
+    echo Please install Ollama from https://ollama.ai/download
+    echo Required AI models: gemma3:4b, llava
+    pause
+    exit /b 1
+)
+
+echo ✓ Python, Node.js, and Ollama detected
 
 :: Create virtual environment if it doesn't exist
 if not exist "venv" (
@@ -64,6 +74,37 @@ if %errorlevel% neq 0 (
 @REM )
 @REM cd ..
 
+:: Check and install required AI models
+echo.
+echo Checking AI models...
+ollama list | findstr "gemma3" >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Installing gemma3:4b model (required for text chat)...
+    ollama pull gemma3:4b
+    if %errorlevel% neq 0 (
+        echo WARNING: Failed to install gemma3:4b model
+        echo AI chat may not work properly
+    ) else (
+        echo ✓ gemma3:4b model installed
+    )
+) else (
+    echo ✓ gemma3 model already available
+)
+
+ollama list | findstr "llava" >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Installing llava model (required for image processing)...
+    ollama pull llava
+    if %errorlevel% neq 0 (
+        echo WARNING: Failed to install llava model
+        echo Image analysis may not work properly
+    ) else (
+        echo ✓ llava model installed
+    )
+) else (
+    echo ✓ llava model already available
+)
+
 echo.
 echo ================================================
 echo    Dependencies installed successfully!
@@ -71,12 +112,21 @@ echo ================================================
 echo.
 echo Starting Elder Care System...
 echo.
-echo 1. Backend API will start on: http://localhost:8000
-echo 2. Frontend will start on: http://localhost:3000
-echo 3. API Documentation: http://localhost:8000/docs
+echo 1. Ollama AI Service: http://localhost:11434
+echo 2. Backend API will start on: http://localhost:8000
+echo 3. Frontend will start on: http://localhost:3000
+echo 4. API Documentation: http://localhost:8000/docs
 echo.
 echo Press Ctrl+C to stop the services
 echo.
+
+:: Start Ollama service first (if not already running)
+echo Starting Ollama AI service...
+start "Ollama AI Service" cmd /k "ollama serve"
+
+:: Wait for Ollama to start
+echo Waiting for Ollama service to initialize...
+timeout /t 10 /nobreak >nul
 
 :: Start backend in new window
 echo Starting Backend API...

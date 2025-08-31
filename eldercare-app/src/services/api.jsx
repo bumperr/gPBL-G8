@@ -24,7 +24,7 @@ export const apiService = {
   },
 
   // Chat with AI
-  async sendChatMessage(message, model = 'llama3.2') {
+  async sendChatMessage(message, model = 'gemma3:4b') {
     try {
       const response = await api.post('/chat', {
         message,
@@ -185,6 +185,107 @@ export const apiService = {
       return response.data;
     } catch (error) {
       console.error('Smart home control failed:', error);
+      throw error;
+    }
+  },
+
+  // Enhanced chat with different types and image support
+  async enhancedChat(data) {
+    try {
+      const response = await api.post('/chat/', data);
+      return response.data;
+    } catch (error) {
+      console.error('Enhanced chat failed:', error);
+      throw error;
+    }
+  },
+
+  // Chat with image upload
+  async chatWithImage(formData) {
+    try {
+      const response = await api.post('/chat/upload-image', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Image chat failed:', error);
+      throw error;
+    }
+  },
+
+  // Legacy chat (backward compatibility)
+  async legacyChat(message, model) {
+    try {
+      const response = await api.post('/chat/legacy', {
+        message,
+        model
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Legacy chat failed:', error);
+      throw error;
+    }
+  },
+
+  // Device management
+  async getDevices() {
+    try {
+      const response = await api.get('/devices');
+      return response.data;
+    } catch (error) {
+      console.error('Get devices failed:', error);
+      throw error;
+    }
+  },
+
+  async getDevicesByRoom(room) {
+    try {
+      const response = await api.get(`/devices/rooms/${room}`);
+      return response.data;
+    } catch (error) {
+      console.error('Get devices by room failed:', error);
+      throw error;
+    }
+  },
+
+  async getDevicesByCategory(category) {
+    try {
+      const response = await api.get(`/devices/categories/${category}`);
+      return response.data;
+    } catch (error) {
+      console.error('Get devices by category failed:', error);
+      throw error;
+    }
+  },
+
+  async getDeviceDetails(deviceId) {
+    try {
+      const response = await api.get(`/devices/${deviceId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Get device details failed:', error);
+      throw error;
+    }
+  },
+
+  async searchDevices(query) {
+    try {
+      const response = await api.get(`/devices/search?q=${encodeURIComponent(query)}`);
+      return response.data;
+    } catch (error) {
+      console.error('Search devices failed:', error);
+      throw error;
+    }
+  },
+
+  async getDeviceSummary() {
+    try {
+      const response = await api.get('/devices/summary');
+      return response.data;
+    } catch (error) {
+      console.error('Get device summary failed:', error);
       throw error;
     }
   }

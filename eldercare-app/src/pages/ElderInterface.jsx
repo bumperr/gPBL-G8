@@ -13,7 +13,9 @@ import {
   Divider,
   Fab,
   Tabs,
-  Tab
+  Tab,
+  Slider,
+  Chip
 } from '@mui/material';
 import {
   Warning,
@@ -27,9 +29,12 @@ import {
   Lock,
   LockOpen,
   Mic,
-  Chat
+  Chat,
+  Lightbulb,
+  Kitchen,
+  Bed,
+  Chair
 } from '@mui/icons-material';
-import AudioRecorder from '../components/AudioRecorder';
 import TextChat from '../components/TextChat';
 import apiService from '../services/api';
 
@@ -39,6 +44,21 @@ const ElderInterface = ({ elderInfo, onEmergency }) => {
   const [lastResponse, setLastResponse] = useState('');
   const [activeTab, setActiveTab] = useState(0);
   const [intentDetections, setIntentDetections] = useState([]);
+  
+  // Smart home control state (same as caregiver dashboard)
+  const [smartHomeControls, setSmartHomeControls] = useState({
+    lights: {
+      living_room: false,
+      kitchen: false,
+      bedroom: false,
+      bathroom: false
+    },
+    thermostat: {
+      temperature: 22, // Current set temperature
+      current_temp: 23.5, // Current room temperature from DHT11
+      humidity: 65 // Current humidity from DHT11
+    }
+  });
 
   // Check server health on component mount
   useEffect(() => {
@@ -57,6 +77,98 @@ const ElderInterface = ({ elderInfo, onEmergency }) => {
     // Check every 30 seconds
     const interval = setInterval(checkHealth, 30000);
     return () => clearInterval(interval);
+  }, []);
+
+  // WebSocket connection for real-time MQTT updates (same as caregiver dashboard)
+  useEffect(() => {
+    const ws = new WebSocket('ws://localhost:8000/ws/smart-home');
+    
+    ws.onopen = () => {
+      console.log('Elder interface: WebSocket connected for smart home updates');
+    };
+    
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('Elder interface: WebSocket message received:', data);
+        
+        if (data.type === 'initial_state' || data.type === 'state_update') {
+          // Update smart home controls with real Arduino data
+          const state = data.current_state || data.data;
+          
+          if (state.sensors) {
+            setSmartHomeControls(prev => ({
+              ...prev,
+              thermostat: {
+                ...prev.thermostat,
+                current_temp: state.sensors.temperature || prev.thermostat.current_temp,
+                humidity: state.sensors.humidity || prev.thermostat.humidity
+              }
+            }));
+          }
+          
+          if (state.devices) {
+            setSmartHomeControls(prev => ({
+              ...prev,
+              lights: {
+                ...prev.lights,
+                // Update LED state if available (Arduino only has one LED)
+                living_room: state.devices.led === "ON" ? true : prev.lights.living_room
+              },
+              thermostat: {
+                ...prev.thermostat,
+                temperature: state.devices.thermostat_target || prev.thermostat.temperature
+              }
+            }));
+          }
+        }
+        
+        if (data.type === 'mqtt_update') {
+          // Handle specific MQTT topic updates
+          if (data.topic === 'home/dht11') {
+            const [temp, humidity] = data.message.split(',');
+            setSmartHomeControls(prev => ({
+              ...prev,
+              thermostat: {
+                ...prev.thermostat,
+                current_temp: parseFloat(temp) || prev.thermostat.current_temp,
+                humidity: parseFloat(humidity) || prev.thermostat.humidity
+              }
+            }));
+          } else if (data.topic === 'home/led/cmd') {
+            setSmartHomeControls(prev => ({
+              ...prev,
+              lights: {
+                ...prev.lights,
+                living_room: data.message === "ON"
+              }
+            }));
+          } else if (data.topic === 'home/thermostat/set') {
+            setSmartHomeControls(prev => ({
+              ...prev,
+              thermostat: {
+                ...prev.thermostat,
+                temperature: parseInt(data.message) || prev.thermostat.temperature
+              }
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Elder interface: Error processing WebSocket message:', error);
+      }
+    };
+    
+    ws.onerror = (error) => {
+      console.error('Elder interface: WebSocket error:', error);
+    };
+    
+    ws.onclose = () => {
+      console.log('Elder interface: WebSocket disconnected');
+    };
+    
+    return () => {
+      ws.close();
+    };
   }, []);
 
   const handleMessageSent = (messageData) => {
@@ -81,9 +193,27 @@ const ElderInterface = ({ elderInfo, onEmergency }) => {
   const speakText = (text) => {
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.8;
-      utterance.pitch = 1;
-      utterance.volume = 1;
+      
+      // Enhanced voice settings for warm, vibrant, happy tone
+      utterance.rate = 0.85; // Slightly faster but still clear
+      utterance.pitch = 1.2; // Higher pitch for friendlier tone
+      utterance.volume = 0.9; // Comfortable volume
+      
+      // Try to select a female voice if available (typically warmer)
+      const voices = speechSynthesis.getVoices();
+      const preferredVoices = voices.filter(voice => 
+        voice.lang.startsWith('en') && 
+        (voice.name.toLowerCase().includes('female') || 
+         voice.name.toLowerCase().includes('karen') ||
+         voice.name.toLowerCase().includes('samantha') ||
+         voice.name.toLowerCase().includes('susan') ||
+         voice.name.toLowerCase().includes('zira'))
+      );
+      
+      if (preferredVoices.length > 0) {
+        utterance.voice = preferredVoices[0];
+      }
+      
       speechSynthesis.speak(utterance);
     }
   };
@@ -109,13 +239,54 @@ const ElderInterface = ({ elderInfo, onEmergency }) => {
     }
   };
 
-  const handleSmartHomeControl = async (device, action, value = null) => {
+  // Smart home control functions (similar to caregiver dashboard)
+  const handleLightControl = async (room, state) => {
     try {
-      await apiService.controlSmartHome(device, action, value);
-      const message = `${device} ${action}${value ? ` to ${value}` : ''}`;
-      speakText(`${message} completed`);
+      // Arduino only has one LED (home/led/cmd), but we track all rooms in UI
+      const mqttTopic = room === 'living_room' ? 'home/led/cmd' : `home/${room}/led/cmd`;
+      const command = state ? 'ON' : 'OFF';
+      
+      await apiService.sendMQTTMessage(mqttTopic, command);
+      console.log(`Elder interface: Light command sent for ${room}: ${command}`);
+      speakText(`${room.replace('_', ' ')} lights ${state ? 'turned on' : 'turned off'}`);
+      
+    } catch (error) {
+      console.error('Failed to control light:', error);
+      speakText('Sorry, light control failed. Please try again.');
+    }
+  };
+
+  const handleThermostatChange = async (newTemperature) => {
+    try {
+      // Send thermostat command via MQTT
+      await apiService.sendMQTTMessage('home/thermostat/set', newTemperature.toString());
+      console.log(`Elder interface: Thermostat command sent: ${newTemperature}°C`);
+      speakText(`Temperature set to ${newTemperature} degrees celsius`);
+      
+    } catch (error) {
+      console.error('Failed to control thermostat:', error);
+      speakText('Sorry, thermostat control failed. Please try again.');
+    }
+  };
+
+  const handleSmartHomeControl = async (device, action, value = null, room = null) => {
+    try {
+      // Legacy function for backward compatibility
+      if (device === 'led' || (device === 'lights' && (action === 'turn_on' || action === 'turn_off'))) {
+        const isOn = action === 'turn_on' || action === 'ON';
+        await handleLightControl(room || 'living_room', isOn);
+      } else if (device === 'thermostat' && action === 'set_temperature') {
+        const temp = value || 22;
+        await handleThermostatChange(temp);
+      } else {
+        // Fallback for other devices (non-Arduino)
+        await apiService.controlSmartHome(device, action, value);
+        const message = `${device} ${action}${value ? ` to ${value}` : ''}`;
+        speakText(`${message} completed`);
+      }
     } catch (error) {
       console.error('Smart home control failed:', error);
+      speakText('Sorry, smart home control failed. Please try again.');
     }
   };
 
@@ -138,27 +309,13 @@ const ElderInterface = ({ elderInfo, onEmergency }) => {
 
   const quickActions = [
     {
-      label: 'Turn on Lights',
-      icon: <Brightness6 />,
-      action: () => handleSmartHomeControl('lights', 'turn_on'),
-      color: '#FFC107'
-    },
-    {
-      label: 'Set Temperature',
-      icon: <Thermostat />,
-      action: () => handleSmartHomeControl('thermostat', 'set_temperature', 72),
-      color: '#FF5722'
-    },
-    {
-      label: 'Lock Doors',
-      icon: <Lock />,
-      action: () => handleSmartHomeControl('doors', 'lock'),
-      color: '#795548'
-    },
-    {
-      label: 'Call Family',
+      label: 'Call Sarah',
       icon: <Phone />,
-      action: () => speakText('Calling your family now'),
+      action: () => {
+        const whatsappUrl = `https://wa.me/6011468550?text=Hi Sarah, this is John. Could you give me a call when you're free?`;
+        window.open(whatsappUrl, '_blank');
+        speakText('Calling Sarah via WhatsApp');
+      },
       color: '#4CAF50'
     }
   ];
@@ -200,40 +357,17 @@ const ElderInterface = ({ elderInfo, onEmergency }) => {
         </Alert>
       )}
 
-      {/* Communication Tabs */}
-      <Paper elevation={2} sx={{ mb: 3, borderRadius: 3 }}>
-        <Tabs 
-          value={activeTab} 
-          onChange={(e, newValue) => setActiveTab(newValue)}
-          variant="fullWidth"
-          sx={{ borderBottom: 1, borderColor: 'divider' }}
-        >
-          <Tab 
-            icon={<Mic />} 
-            label="Voice Chat" 
-            sx={{ fontSize: '1.1rem', fontWeight: 'bold' }}
+      {/* AI Assistant Chat - Full Width */}
+      <Paper elevation={2} sx={{ borderRadius: 3, height: '600px', mb: 3 }}>
+        
+        <Box sx={{ height: 'calc(600px - 64px)' }}>
+          <TextChat
+            elderInfo={elderInfo}
+            onIntentDetected={handleIntentDetected}
+            enableVoiceMessages={true}
+            onVoiceMessage={handleMessageSent}
+            height="100%"
           />
-          <Tab 
-            icon={<Chat />} 
-            label="Text Chat" 
-            sx={{ fontSize: '1.1rem', fontWeight: 'bold' }}
-          />
-        </Tabs>
-
-        <Box sx={{ p: 3 }}>
-          {activeTab === 0 && (
-            <AudioRecorder
-              onMessageSent={handleMessageSent}
-              elderInfo={elderInfo}
-            />
-          )}
-          
-          {activeTab === 1 && (
-            <TextChat
-              elderInfo={elderInfo}
-              onIntentDetected={handleIntentDetected}
-            />
-          )}
         </Box>
       </Paper>
 
@@ -249,6 +383,200 @@ const ElderInterface = ({ elderInfo, onEmergency }) => {
           </Typography>
         </Paper>
       )}
+
+      {/* Smart Home Controls */}
+      <Paper elevation={2} sx={{ p: 3, mb: 3, borderRadius: 3 }}>
+        <Typography variant="h6" gutterBottom sx={{ color: '#2e7d32', fontWeight: 'bold', mb: 3 }}>
+          🏠 John's Smart Home Controls
+        </Typography>
+        
+        <Grid container spacing={3}>
+          {/* Room Light Controls */}
+          <Grid item xs={12} md={8}>
+            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: '#388e3c' }}>
+              💡 Room Lights
+            </Typography>
+            <Grid container spacing={2}>
+              {Object.entries(smartHomeControls.lights).map(([room, isOn]) => {
+                const roomIcons = {
+                  living_room: <Chair />,
+                  kitchen: <Kitchen />,
+                  bedroom: <Bed />,
+                  bathroom: <Home />
+                };
+                
+                return (
+                  <Grid item xs={6} sm={3} key={room}>
+                    <Card sx={{ 
+                      borderRadius: 3,
+                      backgroundColor: isOn ? '#c8e6c9' : '#f5f5f5',
+                      border: isOn ? '2px solid #4caf50' : '2px solid #e0e0e0',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease-in-out',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: '0 4px 20px rgba(76, 175, 80, 0.3)'
+                      }
+                    }}>
+                      <CardContent 
+                        sx={{ 
+                          textAlign: 'center', 
+                          py: 2,
+                          '&:last-child': { pb: 2 }
+                        }}
+                        onClick={() => handleLightControl(room, !isOn)}
+                      >
+                        <Box sx={{ 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          alignItems: 'center', 
+                          gap: 1 
+                        }}>
+                          <Box sx={{ position: 'relative' }}>
+                            {roomIcons[room]}
+                            <Lightbulb sx={{ 
+                              position: 'absolute',
+                              top: -8,
+                              right: -8,
+                              fontSize: '1rem',
+                              color: isOn ? '#4caf50' : '#bdbdbd'
+                            }} />
+                          </Box>
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              fontWeight: 'bold',
+                              color: isOn ? '#2e7d32' : '#757575',
+                              fontSize: '0.75rem'
+                            }}
+                          >
+                            {room.replace('_', ' ').toUpperCase()}
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                );
+              })}
+            </Grid>
+          </Grid>
+
+          {/* Thermostat Control */}
+          <Grid item xs={12} md={4}>
+            <Card sx={{ 
+              borderRadius: 3,
+              background: 'linear-gradient(135deg, #f1f8e9 0%, #e8f5e8 100%)',
+              border: '2px solid #81c784',
+              height: '100%'
+            }}>
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ textAlign: 'center', mb: 2 }}>
+                  <Thermostat sx={{ fontSize: 40, color: '#4caf50', mb: 1 }} />
+                  <Typography variant="h4" sx={{ color: '#2e7d32', fontWeight: 'bold' }}>
+                    {smartHomeControls.thermostat.temperature}°C
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Target Temperature
+                  </Typography>
+                </Box>
+
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    Current: {smartHomeControls.thermostat.current_temp}°C
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Humidity: {smartHomeControls.thermostat.humidity}%
+                  </Typography>
+                </Box>
+
+                <Box sx={{ px: 1, mb: 2 }}>
+                  <input
+                    type="range"
+                    min="16"
+                    max="30"
+                    value={smartHomeControls.thermostat.temperature}
+                    onChange={(e) => handleThermostatChange(parseInt(e.target.value))}
+                    style={{
+                      width: '100%',
+                      height: '6px',
+                      borderRadius: '4px',
+                      background: `linear-gradient(to right, #81c784 0%, #4caf50 50%, #2e7d32 100%)`,
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  />
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    mt: 0.5 
+                  }}>
+                    <Typography variant="caption" color="text.secondary">16°C</Typography>
+                    <Typography variant="caption" color="text.secondary">30°C</Typography>
+                  </Box>
+                </Box>
+
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    sx={{ 
+                      borderColor: '#4caf50', 
+                      color: '#2e7d32',
+                      '&:hover': { backgroundColor: '#e8f5e8' },
+                      fontSize: '1.2rem'
+                    }}
+                    onClick={() => handleThermostatChange(smartHomeControls.thermostat.temperature - 1)}
+                  >
+                    ➖
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    sx={{ 
+                      borderColor: '#4caf50', 
+                      color: '#2e7d32',
+                      '&:hover': { backgroundColor: '#e8f5e8' },
+                      fontSize: '1.2rem'
+                    }}
+                    onClick={() => handleThermostatChange(smartHomeControls.thermostat.temperature + 1)}
+                  >
+                    ➕
+                  </Button>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {/* Bedroom Temperature Reading */}
+      <Paper elevation={2} sx={{ p: 3, mb: 3, borderRadius: 3 }}>
+        <Typography variant="h6" gutterBottom sx={{ color: '#2e7d32', fontWeight: 'bold' }}>
+          🌡️ Bedroom Temperature & Humidity
+        </Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={6}>
+            <Card sx={{ p: 2, backgroundColor: '#e8f5e8', textAlign: 'center' }}>
+              <Typography variant="h3" sx={{ color: '#2e7d32', fontWeight: 'bold' }}>
+                {smartHomeControls.thermostat.current_temp}°C
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Current Temperature
+              </Typography>
+            </Card>
+          </Grid>
+          <Grid item xs={6}>
+            <Card sx={{ p: 2, backgroundColor: '#e3f2fd', textAlign: 'center' }}>
+              <Typography variant="h3" sx={{ color: '#1976d2', fontWeight: 'bold' }}>
+                {smartHomeControls.thermostat.humidity}%
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Humidity Level
+              </Typography>
+            </Card>
+          </Grid>
+        </Grid>
+      </Paper>
 
       {/* Quick Actions */}
       <Paper elevation={2} sx={{ p: 3, mb: 3, borderRadius: 3 }}>
