@@ -16,7 +16,7 @@ export const apiService = {
   // Health check
   async checkHealth() {
     try {
-      const response = await api.get('/api/health');
+      const response = await api.get('/health');
       return response.data;
     } catch (error) {
       console.error('Health check failed:', error);
@@ -27,7 +27,7 @@ export const apiService = {
   // Chat with AI
   async sendChatMessage(message, model = 'gemma3:4b') {
     try {
-      const response = await api.post('/api/chat', {
+      const response = await api.post('/chat', {
         message,
         model
       });
@@ -41,7 +41,7 @@ export const apiService = {
   // Speech to Text
   async speechToText(audioData, language = 'en', model = 'whisper') {
     try {
-      const response = await api.post('/api/speech/transcribe', {
+      const response = await api.post('/speech/transcribe', {
         audio_data: audioData,
         language,
         model
@@ -56,7 +56,7 @@ export const apiService = {
   // Voice assistance for elders
   async processElderSpeech(audioData, elderInfo, language = 'en') {
     try {
-      const response = await api.post('/api/eldercare/voice-assistance', {
+      const response = await api.post('/eldercare/voice-assistance', {
         audio_data: audioData,
         elder_info: elderInfo,
         language
@@ -71,7 +71,7 @@ export const apiService = {
   // Text assistance for elders with mental health focus
   async processElderText(message, elderInfo) {
     try {
-      const response = await api.post('/api/eldercare/text-assistance', {
+      const response = await api.post('/eldercare/text-assistance', {
         message,
         elder_info: elderInfo
       });
@@ -85,7 +85,7 @@ export const apiService = {
   // Send MQTT message
   async sendMQTTMessage(topic, message) {
     try {
-      const response = await api.post('/api/mqtt/send', {
+      const response = await api.post('/mqtt/send', {
         topic,
         message
       });
@@ -110,7 +110,7 @@ export const apiService = {
   // Emergency alert (updated)
   async sendManualEmergency(elderName, message, severity = 'high', location = null) {
     try {
-      const response = await api.post('/api/eldercare/manual-emergency', {
+      const response = await api.post('/eldercare/manual-emergency', {
         elder_name: elderName,
         message,
         severity,
@@ -136,7 +136,7 @@ export const apiService = {
         priority: 'high'
       };
       
-      const response = await api.post('/api/mqtt/send', {
+      const response = await api.post('/mqtt/send', {
         topic: 'emergency/alerts',
         message: JSON.stringify(emergencyData)
       });
@@ -157,7 +157,7 @@ export const apiService = {
         timestamp: new Date().toISOString()
       };
       
-      const response = await api.post('/api/mqtt/send', {
+      const response = await api.post('/mqtt/send', {
         topic: 'health/monitoring',
         message: JSON.stringify(healthData)
       });
@@ -179,7 +179,7 @@ export const apiService = {
         timestamp: new Date().toISOString()
       };
       
-      const response = await api.post('/api/mqtt/send', {
+      const response = await api.post('/mqtt/send', {
         topic: 'smarthome/control',
         message: JSON.stringify(controlData)
       });
@@ -193,7 +193,7 @@ export const apiService = {
   // Enhanced chat with different types and image support
   async enhancedChat(data) {
     try {
-      const response = await api.post('/api/chat/', data);
+      const response = await api.post('/chat/', data);
       return response.data;
     } catch (error) {
       console.error('Enhanced chat failed:', error);
@@ -204,7 +204,7 @@ export const apiService = {
   // Chat with image upload
   async chatWithImage(formData) {
     try {
-      const response = await api.post('/api/chat/upload-image', formData, {
+      const response = await api.post('/chat/upload-image', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -219,7 +219,7 @@ export const apiService = {
   // Legacy chat (backward compatibility)
   async legacyChat(message, model) {
     try {
-      const response = await api.post('/api/chat/legacy', {
+      const response = await api.post('/chat/legacy', {
         message,
         model
       });
@@ -233,7 +233,7 @@ export const apiService = {
   // Device management
   async getDevices() {
     try {
-      const response = await api.get('/api/devices');
+      const response = await api.get('/devices');
       return response.data;
     } catch (error) {
       console.error('Get devices failed:', error);
@@ -243,7 +243,7 @@ export const apiService = {
 
   async getDevicesByRoom(room) {
     try {
-      const response = await api.get(`/api/devices/rooms/${room}`);
+      const response = await api.get(`/devices/rooms/${room}`);
       return response.data;
     } catch (error) {
       console.error('Get devices by room failed:', error);
@@ -253,7 +253,7 @@ export const apiService = {
 
   async getDevicesByCategory(category) {
     try {
-      const response = await api.get(`/api/devices/categories/${category}`);
+      const response = await api.get(`/devices/categories/${category}`);
       return response.data;
     } catch (error) {
       console.error('Get devices by category failed:', error);
@@ -263,7 +263,7 @@ export const apiService = {
 
   async getDeviceDetails(deviceId) {
     try {
-      const response = await api.get(`/api/devices/${deviceId}`);
+      const response = await api.get(`/devices/${deviceId}`);
       return response.data;
     } catch (error) {
       console.error('Get device details failed:', error);
@@ -273,7 +273,7 @@ export const apiService = {
 
   async searchDevices(query) {
     try {
-      const response = await api.get(`/api/devices/search?q=${encodeURIComponent(query)}`);
+      const response = await api.get(`/devices/search?q=${encodeURIComponent(query)}`);
       return response.data;
     } catch (error) {
       console.error('Search devices failed:', error);
@@ -283,7 +283,7 @@ export const apiService = {
 
   async getDeviceSummary() {
     try {
-      const response = await api.get('/api/devices/summary');
+      const response = await api.get('/devices/summary');
       return response.data;
     } catch (error) {
       console.error('Get device summary failed:', error);

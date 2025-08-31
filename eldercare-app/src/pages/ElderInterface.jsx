@@ -36,6 +36,7 @@ import {
   Chair
 } from '@mui/icons-material';
 import TextChat from '../components/TextChat';
+import VoiceCommunication from '../components/VoiceCommunication';
 import apiService from '../services/api';
 
 const ElderInterface = ({ elderInfo, onEmergency }) => {
@@ -43,6 +44,7 @@ const ElderInterface = ({ elderInfo, onEmergency }) => {
   const [serverStatus, setServerStatus] = useState('disconnected');
   const [lastResponse, setLastResponse] = useState('');
   const [activeTab, setActiveTab] = useState(0);
+  const [communicationMode, setCommunicationMode] = useState(0); // 0: text chat, 1: voice
   const [intentDetections, setIntentDetections] = useState([]);
   
   // Smart home control state (same as caregiver dashboard)
@@ -81,11 +83,22 @@ const ElderInterface = ({ elderInfo, onEmergency }) => {
 
   // WebSocket connection for real-time MQTT updates (same as caregiver dashboard)
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8000/ws/smart-home');
+    let ws = null;
+    let reconnectTimeout = null;
     
-    ws.onopen = () => {
-      console.log('Elder interface: WebSocket connected for smart home updates');
-    };
+    const connectWebSocket = () => {
+      const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/smart-home`;
+      console.log('Elder interface: Attempting WebSocket connection to:', wsUrl);
+      
+      ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        console.log('Elder interface: WebSocket connected for smart home updates');
+        // Send a ping to verify connection
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+        }
+      };
     
     ws.onmessage = (event) => {
       try {
@@ -158,16 +171,39 @@ const ElderInterface = ({ elderInfo, onEmergency }) => {
       }
     };
     
-    ws.onerror = (error) => {
-      console.error('Elder interface: WebSocket error:', error);
+      ws.onerror = (error) => {
+        console.error('Elder interface: WebSocket error:', error);
+        console.error('Elder interface: WebSocket connection failed to:', wsUrl);
+      };
+      
+      ws.onclose = (event) => {
+        console.log('Elder interface: WebSocket disconnected');
+        console.log('Elder interface: WebSocket close event:', { code: event.code, reason: event.reason, wasClean: event.wasClean });
+        
+        // Only attempt reconnect for specific error codes, but limit attempts
+        if (!event.wasClean && event.code === 1006) {
+          console.warn('Elder interface: WebSocket server appears unavailable. App will continue without real-time updates.');
+          // Don't attempt reconnect for now to avoid spam
+        } else if (!event.wasClean && event.code !== 1000) {
+          console.warn('Elder interface: WebSocket connection closed unexpectedly, attempting reconnect in 10 seconds...');
+          reconnectTimeout = setTimeout(() => {
+            console.log('Elder interface: Attempting WebSocket reconnection...');
+            connectWebSocket();
+          }, 10000); // Increased to 10 seconds
+        }
+      };
     };
     
-    ws.onclose = () => {
-      console.log('Elder interface: WebSocket disconnected');
-    };
+    // Initial connection
+    connectWebSocket();
     
     return () => {
-      ws.close();
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+      if (ws) {
+        ws.close();
+      }
     };
   }, []);
 
@@ -307,6 +343,48 @@ const ElderInterface = ({ elderInfo, onEmergency }) => {
     }
   };
 
+  const handleVoiceInteractionSaved = (interaction) => {
+    // Handle voice interaction result
+    const voiceMessage = {
+      id: interaction.id,
+      type: 'voice',
+      timestamp: interaction.timestamp,
+      transcription: { text: interaction.elder_speech },
+      aiResponse: { response: interaction.ai_response },
+      isEmergency: interaction.is_emergency
+    };
+
+    setMessages(prev => [voiceMessage, ...prev]);
+    
+    if (interaction.ai_response) {
+      setLastResponse(interaction.ai_response);
+      // Automatic speech already handled by VoiceCommunication component
+    }
+    
+    // Handle emergency alerts from voice
+    if (interaction.is_emergency && onEmergency) {
+      onEmergency(`Emergency detected via voice: ${interaction.elder_speech}`);
+    }
+
+    // Add to intent detections if intent was detected
+    if (interaction.intent) {
+      setIntentDetections(prev => [
+        {
+          id: interaction.id,
+          elder_message: interaction.elder_speech,
+          ai_response: {
+            intent_detected: interaction.intent,
+            confidence_score: interaction.confidence || 0.8,
+            response: interaction.ai_response
+          },
+          is_emergency: interaction.is_emergency,
+          timestamp: interaction.timestamp
+        },
+        ...prev.slice(0, 9)
+      ]);
+    }
+  };
+
   const quickActions = [
     {
       label: 'Call Sarah',
@@ -357,18 +435,59 @@ const ElderInterface = ({ elderInfo, onEmergency }) => {
         </Alert>
       )}
 
-      {/* AI Assistant Chat - Full Width */}
-      <Paper elevation={2} sx={{ borderRadius: 3, height: '600px', mb: 3 }}>
-        
-        <Box sx={{ height: 'calc(600px - 64px)' }}>
-          <TextChat
-            elderInfo={elderInfo}
-            onIntentDetected={handleIntentDetected}
-            enableVoiceMessages={true}
-            onVoiceMessage={handleMessageSent}
-            height="100%"
-          />
+      {/* AI Assistant Communication - Text and Voice */}
+      <Paper elevation={2} sx={{ borderRadius: 3, mb: 3 }}>
+        {/* Communication Mode Tabs */}
+        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Tabs 
+            value={communicationMode} 
+            onChange={(e, newValue) => setCommunicationMode(newValue)}
+            variant="fullWidth"
+          >
+            <Tab 
+              label="💬 Text Chat" 
+              icon={<Chat />} 
+              sx={{ 
+                fontSize: '1rem', 
+                fontWeight: 'bold',
+                minHeight: 64
+              }}
+            />
+            <Tab 
+              label="🎤 Voice Talk" 
+              icon={<Mic />} 
+              sx={{ 
+                fontSize: '1rem', 
+                fontWeight: 'bold',
+                minHeight: 64
+              }}
+            />
+          </Tabs>
         </Box>
+
+        {/* Text Chat Mode */}
+        {communicationMode === 0 && (
+          <Box sx={{ height: '600px' }}>
+            <TextChat
+              elderInfo={elderInfo}
+              onIntentDetected={handleIntentDetected}
+              enableVoiceMessages={true}
+              onVoiceMessage={handleMessageSent}
+              height="100%"
+            />
+          </Box>
+        )}
+
+        {/* Voice Communication Mode */}
+        {communicationMode === 1 && (
+          <Box sx={{ p: 2 }}>
+            <VoiceCommunication
+              elderInfo={elderInfo}
+              onInteractionSaved={handleVoiceInteractionSaved}
+              showAdvancedControls={false}
+            />
+          </Box>
+        )}
       </Paper>
 
       {/* Last AI Response */}

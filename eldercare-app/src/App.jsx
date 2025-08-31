@@ -313,7 +313,7 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Router>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default' }}>
           {/* App Bar */}
           <AppBar position="sticky" elevation={2} sx={{ 

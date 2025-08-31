@@ -52,12 +52,12 @@ const ServerCameraStream = ({
   const intervalRef = useRef(null);
   const imgRef = useRef(null);
 
-  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  const API_BASE = '';
 
   // Load available cameras
   const loadAvailableCameras = async () => {
     try {
-      const response = await fetch(`${API_BASE}/camera/available`);
+      const response = await fetch(`/api/camera/available`);
       const data = await response.json();
       
       if (data.success) {
@@ -75,7 +75,7 @@ const ServerCameraStream = ({
   // Check camera status
   const checkCameraStatus = async () => {
     try {
-      const response = await fetch(`${API_BASE}/camera/status`);
+      const response = await fetch(`/api/camera/status`);
       const data = await response.json();
       
       if (data.success) {
@@ -97,7 +97,7 @@ const ServerCameraStream = ({
       setError(null);
       
       // Start camera on server
-      const startResponse = await fetch(`${API_BASE}/camera/start/${selectedCamera}`, {
+      const startResponse = await fetch(`/api/camera/start/${selectedCamera}`, {
         method: 'POST'
       });
       const startData = await startResponse.json();
@@ -136,7 +136,7 @@ const ServerCameraStream = ({
       }
       
       // Stop camera on server
-      const stopResponse = await fetch(`${API_BASE}/camera/stop/${selectedCamera}`, {
+      const stopResponse = await fetch(`/api/camera/stop/${selectedCamera}`, {
         method: 'POST'
       });
       
@@ -156,7 +156,7 @@ const ServerCameraStream = ({
   // Fetch latest frame from server
   const fetchLatestFrame = async () => {
     try {
-      const response = await fetch(`${API_BASE}/camera/frame/${selectedCamera}`);
+      const response = await fetch(`/api/camera/frame/${selectedCamera}`);
       const data = await response.json();
       
       if (data.success && data.frame) {
@@ -174,7 +174,7 @@ const ServerCameraStream = ({
   // Take snapshot
   const takeSnapshot = async () => {
     try {
-      const response = await fetch(`${API_BASE}/camera/snapshot/${selectedCamera}`);
+      const response = await fetch(`/api/camera/snapshot/${selectedCamera}`);
       const data = await response.json();
       
       if (data.success) {
@@ -232,19 +232,35 @@ const ServerCameraStream = ({
 
   // Get MJPEG stream URL
   const getMjpegStreamUrl = () => {
-    return `${API_BASE}/camera/stream/${selectedCamera}`;
+    return `/api/camera/stream/${selectedCamera}`;
   };
 
   return (
-    <Card sx={{ maxWidth: width + 50, mx: 'auto' }}>
-      <CardContent>
+    <Card sx={{ 
+      maxWidth: { xs: '100%', sm: width + 50 }, 
+      mx: 'auto',
+      width: '100%'
+    }}>
+      <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
         {/* Camera Status Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: { xs: 'flex-start', sm: 'center' }, 
+          flexDirection: { xs: 'column', sm: 'row' },
+          gap: { xs: 1, sm: 0 },
+          mb: 2 
+        }}>
           <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Videocam color="primary" />
-            Server Camera Stream
+            <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+              Server Camera Stream
+            </Box>
+            <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
+              Camera
+            </Box>
           </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
             <Chip 
               label={cameraStatus} 
               color={cameraStatus === 'online' ? 'success' : 'error'} 
@@ -257,8 +273,19 @@ const ServerCameraStream = ({
                 size="small"
                 startIcon={<Settings />}
                 onClick={() => setSettingsOpen(true)}
+                sx={{ display: { xs: 'none', sm: 'flex' } }}
               >
                 Settings
+              </Button>
+            )}
+            {showControls && (
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => setSettingsOpen(true)}
+                sx={{ display: { xs: 'flex', sm: 'none' }, minWidth: 'auto', px: 1 }}
+              >
+                <Settings />
               </Button>
             )}
           </Box>
@@ -271,23 +298,65 @@ const ServerCameraStream = ({
           </Alert>
         )}
 
-        {/* Camera Selection */}
+        {/* Camera/Video Sample Selection */}
         {showControls && availableCameras.length > 1 && (
           <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel>Select Camera</InputLabel>
+            <InputLabel>Select Camera/Video Sample</InputLabel>
             <Select
               value={selectedCamera}
-              label="Select Camera"
+              label="Select Camera/Video Sample"
               onChange={(e) => handleCameraChange(e.target.value)}
               disabled={isStreaming}
             >
-              {availableCameras.filter(cam => cam.available).map((camera) => (
-                <MenuItem key={camera.id} value={camera.id}>
-                  {camera.name} - {camera.width}x{camera.height}
+              {/* Live Cameras */}
+              <MenuItem disabled sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                📷 Live Cameras
+              </MenuItem>
+              {availableCameras.filter(cam => cam.available && cam.type === 'camera').map((camera) => (
+                <MenuItem key={camera.id} value={camera.id} sx={{ pl: 3 }}>
+                  📷 {camera.name} - {camera.width}x{camera.height}
+                </MenuItem>
+              ))}
+              
+              {/* Video Samples */}
+              <MenuItem disabled sx={{ fontWeight: 'bold', color: 'secondary.main', mt: 1 }}>
+                🎬 VLM Analysis Demo Videos
+              </MenuItem>
+              {availableCameras.filter(cam => cam.available && cam.type === 'video_sample').map((camera) => (
+                <MenuItem key={camera.id} value={camera.id} sx={{ pl: 3 }}>
+                  <Box>
+                    <Typography variant="body2">
+                      🎬 {camera.name} - {camera.duration ? `${camera.duration}s` : 'Demo'}
+                    </Typography>
+                    {camera.description && (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {camera.description}
+                      </Typography>
+                    )}
+                  </Box>
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
+        )}
+
+        {/* VLM Analysis Info for Video Samples */}
+        {showControls && availableCameras.find(cam => cam.id === selectedCamera)?.type === 'video_sample' && (
+          <Box sx={{ 
+            mb: 2, 
+            p: 1.5, 
+            backgroundColor: '#e3f2fd', 
+            borderRadius: 1,
+            border: '1px solid #2196f3'
+          }}>
+            <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              🤖 <strong>VLM Analysis Demo</strong>
+            </Typography>
+            <Typography variant="caption" display="block" color="text.secondary">
+              This video sample demonstrates AI-powered video analysis every 15 seconds using Video-LLaVA technology.
+              Analysis results are automatically stored in the analytics database.
+            </Typography>
+          </Box>
         )}
 
         {/* Video Display */}
@@ -297,8 +366,11 @@ const ServerCameraStream = ({
           overflow: 'hidden', 
           backgroundColor: '#000',
           position: 'relative',
-          width: width,
-          height: height,
+          width: { xs: '100%', sm: width },
+          height: { xs: 'auto', sm: height },
+          aspectRatio: { xs: '4/3', sm: 'auto' },
+          minHeight: { xs: 240, sm: height },
+          maxWidth: '100%',
           mx: 'auto'
         }}>
           {isLoading && (
@@ -374,13 +446,21 @@ const ServerCameraStream = ({
 
         {/* Controls */}
         {showControls && (
-          <Box sx={{ display: 'flex', gap: 1, mt: 2, justifyContent: 'center' }}>
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: 1, 
+            mt: 2, 
+            justifyContent: 'center' 
+          }}>
             {!isStreaming ? (
               <Button
                 variant="contained"
                 startIcon={isLoading ? <CircularProgress size={20} /> : <Videocam />}
                 onClick={startStreaming}
                 disabled={isLoading || cameraStatus === 'offline'}
+                fullWidth={{ xs: true, sm: false }}
+                sx={{ minWidth: { sm: 120 } }}
               >
                 Start Stream
               </Button>
@@ -391,6 +471,8 @@ const ServerCameraStream = ({
                 startIcon={<Stop />}
                 onClick={stopStreaming}
                 disabled={isLoading}
+                fullWidth={{ xs: true, sm: false }}
+                sx={{ minWidth: { sm: 120 } }}
               >
                 Stop Stream
               </Button>
@@ -401,6 +483,8 @@ const ServerCameraStream = ({
               startIcon={<CameraAlt />}
               onClick={takeSnapshot}
               disabled={!isStreaming || isLoading}
+              fullWidth={{ xs: true, sm: false }}
+              sx={{ minWidth: { sm: 100 } }}
             >
               Snapshot
             </Button>
@@ -410,6 +494,8 @@ const ServerCameraStream = ({
               startIcon={<Refresh />}
               onClick={loadAvailableCameras}
               disabled={isLoading}
+              fullWidth={{ xs: true, sm: false }}
+              sx={{ minWidth: { sm: 100 } }}
             >
               Refresh
             </Button>
@@ -417,12 +503,36 @@ const ServerCameraStream = ({
         )}
 
         {/* Status Info */}
-        <Box sx={{ mt: 2, p: 1, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+        <Box sx={{ 
+          mt: 2, 
+          p: { xs: 0.5, sm: 1 }, 
+          backgroundColor: '#f5f5f5', 
+          borderRadius: 1,
+          display: { xs: 'none', sm: 'block' }
+        }}>
           <Typography variant="caption" display="block">
             Camera: {selectedCamera} | Status: {isStreaming ? 'Streaming' : 'Stopped'}
           </Typography>
           <Typography variant="caption" display="block">
             Mode: {streamMode.toUpperCase()} | Resolution: {width}x{height}
+          </Typography>
+        </Box>
+        
+        {/* Mobile Status Info - Compact */}
+        <Box sx={{ 
+          mt: 1, 
+          display: { xs: 'flex', sm: 'none' },
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <Typography variant="caption" color="text.secondary">
+            Cam {selectedCamera}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {isStreaming ? '🔴 Live' : '⚫ Off'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {streamMode.toUpperCase()}
           </Typography>
         </Box>
       </CardContent>

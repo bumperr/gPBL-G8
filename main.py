@@ -11,6 +11,9 @@ import asyncio
 mqtt_service = MQTTService(broker="10.136.133.66", port=1883)
 speech_service = SpeechToTextService()
 
+# Initialize VLM service for video analysis
+from api.services.vlm_service import vlm_service
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan event handler for startup and shutdown"""
@@ -47,6 +50,17 @@ async def lifespan(app: FastAPI):
         print("Chat route services initialized")
     except Exception as e:
         print(f"Chat route services initialization failed: {e}")
+    
+    # Initialize VLM service
+    try:
+        await vlm_service.initialize()
+        print("VLM service initialized")
+        
+        # Start VLM analysis processing in background
+        asyncio.create_task(vlm_service.process_analysis_queue())
+        print("VLM analysis queue processor started")
+    except Exception as e:
+        print(f"VLM service initialization failed: {e}")
     
     print("Elder Care Speech Assistant API is ready!")
     

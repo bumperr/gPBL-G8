@@ -171,3 +171,71 @@ async def cleanup_cameras():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error cleaning up cameras: {str(e)}")
+
+@router.post("/analyze-vlm/{camera_id}")
+async def trigger_vlm_analysis(camera_id: int, elder_id: int = 1):
+    """Manually trigger VLM analysis for a camera/video sample"""
+    try:
+        from api.services.vlm_service import vlm_service
+        
+        # Check if camera is streaming
+        if not camera_service.active_streams.get(camera_id, False):
+            return {
+                "success": False,
+                "message": f"Camera {camera_id} is not currently streaming",
+                "camera_id": camera_id
+            }
+        
+        # Get current frame
+        current_frame = camera_service.get_latest_frame(camera_id)
+        if not current_frame:
+            return {
+                "success": False,
+                "message": f"No frame available from camera {camera_id}",
+                "camera_id": camera_id
+            }
+        
+        # Add frame to VLM buffer and trigger analysis
+        timestamp = datetime.now().isoformat()
+        vlm_service.add_frame_to_buffer(camera_id, current_frame, timestamp)
+        vlm_service.queue_analysis(camera_id, elder_id)
+        
+        return {
+            "success": True,
+            "message": f"VLM analysis triggered for camera {camera_id}",
+            "camera_id": camera_id,
+            "elder_id": elder_id,
+            "timestamp": timestamp,
+            "analysis_queued": True
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error triggering VLM analysis: {str(e)}")
+
+@router.get("/vlm-status/{camera_id}")
+async def get_vlm_status(camera_id: int):
+    """Get VLM analysis status for a camera"""
+    try:
+        from api.services.vlm_service import vlm_service
+        
+        # Check if camera has frames in VLM buffer
+        buffer_size = len(vlm_service.frame_buffer.get(camera_id, []))
+        is_streaming = camera_service.active_streams.get(camera_id, False)
+        
+        # Get camera info
+        camera_info = next((c for c in camera_service.camera_info if c['id'] == camera_id), None)
+        
+        return {
+            "success": True,
+            "camera_id": camera_id,
+            "camera_info": camera_info,
+            "is_streaming": is_streaming,
+            "vlm_buffer_size": buffer_size,
+            "vlm_ready": buffer_size >= 10,
+            "analysis_frequency": "Every 15 seconds when streaming",
+            "queue_size": vlm_service.analysis_queue.qsize(),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting VLM status: {str(e)}")

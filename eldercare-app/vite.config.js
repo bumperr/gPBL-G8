@@ -8,18 +8,24 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    open: true,
-    host: true, // Allow external connections
-    allowedHosts: true,// Allow all hosts
-  proxy: {
-    '/api': {
-      target: 'http://localhost:8000',
-      changeOrigin: true,
-      secure: false,
-      rewrite: path => path.replace(/^\/api/, ''), 
-          },
-        },
-
+    host: '0.0.0.0', // Allow external connections
+    strictPort: true, // Fail if port 3000 is in use
+    allowedHosts:true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+        rewrite: path => path.replace(/^\/api/, ''),
+      },
+      '/ws': {
+        target: 'ws://localhost:8000',
+        ws: true,
+        changeOrigin: true,
+        secure: false,
+        timeout: 60000,
+      },
+    },
   },
   resolve: {
     alias: {

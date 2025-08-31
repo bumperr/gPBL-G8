@@ -99,7 +99,7 @@ const CaregiverDashboard = ({ caregiverInfo }) => {
       console.log('Loading eldercare data...');
       
       // Get facility dashboard data
-      const dashboardResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/eldercare/dashboard`);
+      const dashboardResponse = await fetch(`/api/eldercare/dashboard`);
       console.log('Dashboard response status:', dashboardResponse.status);
       
       if (!dashboardResponse.ok) {
@@ -133,7 +133,7 @@ const CaregiverDashboard = ({ caregiverInfo }) => {
   // Load specific elder details
   const loadElderDetails = async (elderId) => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/eldercare/elders/${elderId}`);
+      const response = await fetch(`/api/eldercare/elders/${elderId}`);
       const data = await response.json();
       
       if (data.success) {
@@ -266,7 +266,9 @@ const CaregiverDashboard = ({ caregiverInfo }) => {
 
   // WebSocket connection for real-time MQTT updates
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8000/ws/smart-home');
+    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/smart-home`;
+    console.log('CaregiverDashboard: Attempting WebSocket connection to:', wsUrl);
+    const ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {
       console.log('WebSocket connected for smart home updates');
@@ -629,13 +631,25 @@ const CaregiverDashboard = ({ caregiverInfo }) => {
       <Dialog
         open={videoStreamOpen}
         onClose={() => setVideoStreamOpen(false)}
-        maxWidth="md"
+        maxWidth="lg"
         fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            maxHeight: { xs: '100%', sm: '90vh' },
+            margin: { xs: 0, sm: 2 }
+          }
+        }}
       >
-        <DialogTitle>
+        <DialogTitle sx={{ 
+          pb: { xs: 1, sm: 2 },
+          fontSize: { xs: '1.1rem', sm: '1.25rem' }
+        }}>
           Video Monitoring - {selectedElder?.name || 'Select Elder'}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ 
+          p: { xs: 1, sm: 2 },
+          '&:first-of-type': { pt: { xs: 1, sm: 2 } }
+        }}>
           <ServerCameraStream
             cameraId={0}
             onSnapshot={handleSnapshot}

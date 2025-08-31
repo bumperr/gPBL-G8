@@ -61,8 +61,9 @@ const CameraAnalytics = ({ elderId = 1, elderName = "John" }) => {
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [aiAnalysisOpen, setAiAnalysisOpen] = useState(false);
   const [loadingAI, setLoadingAI] = useState(false);
+  const [streamAnalysisStatus, setStreamAnalysisStatus] = useState(null);
 
-  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  const API_BASE = '';
 
   // Activity type colors and icons
   const getActivityTypeConfig = (type) => {
@@ -89,7 +90,7 @@ const CameraAnalytics = ({ elderId = 1, elderName = "John" }) => {
         params.append('activity_type', activityType);
       }
       
-      const response = await fetch(`${API_BASE}/analytics/camera/${elderId}?${params}`);
+      const response = await fetch(`/api/analytics/camera/${elderId}?${params}`);
       const data = await response.json();
       
       if (data.success) {
@@ -110,7 +111,7 @@ const CameraAnalytics = ({ elderId = 1, elderName = "John" }) => {
     try {
       setLoadingAI(true);
       
-      const response = await fetch(`${API_BASE}/analytics/ai-analysis/${elderId}?period=${period}`);
+      const response = await fetch(`/api/analytics/ai-analysis/${elderId}?period=${period}`);
       const data = await response.json();
       
       if (data.success) {
@@ -126,9 +127,65 @@ const CameraAnalytics = ({ elderId = 1, elderName = "John" }) => {
     }
   };
 
+  // Check stream analysis status
+  const checkStreamAnalysisStatus = async () => {
+    try {
+      // Check for active camera streams with VLM analysis
+      const cameraStatusResponse = await fetch('/api/camera/status');
+      const cameraStatus = await cameraStatusResponse.json();
+      
+      if (cameraStatus.success) {
+        const activeStreams = Object.keys(cameraStatus.active_streams || {}).filter(
+          id => cameraStatus.active_streams[id]
+        );
+        
+        if (activeStreams.length > 0) {
+          // Check VLM status for active cameras
+          const vlmStatusPromises = activeStreams.map(async (cameraId) => {
+            try {
+              const vlmResponse = await fetch(`/api/camera/vlm-status/${cameraId}`);
+              return await vlmResponse.json();
+            } catch (error) {
+              return { camera_id: cameraId, vlm_ready: false };
+            }
+          });
+          
+          const vlmStatuses = await Promise.all(vlmStatusPromises);
+          
+          setStreamAnalysisStatus({
+            active: true,
+            cameras: vlmStatuses,
+            total_active: activeStreams.length,
+            vlm_active: vlmStatuses.filter(status => status.vlm_ready).length,
+            last_updated: new Date().toISOString()
+          });
+        } else {
+          setStreamAnalysisStatus({
+            active: false,
+            message: "No active camera streams",
+            last_updated: new Date().toISOString()
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error checking stream analysis status:', error);
+      setStreamAnalysisStatus({
+        active: false,
+        error: "Failed to check stream status",
+        last_updated: new Date().toISOString()
+      });
+    }
+  };
+
   // Initialize data
   useEffect(() => {
     loadAnalytics();
+    checkStreamAnalysisStatus();
+    
+    // Check stream status every 30 seconds
+    const streamStatusInterval = setInterval(checkStreamAnalysisStatus, 30000);
+    
+    return () => clearInterval(streamStatusInterval);
   }, [period, activityType, elderId]);
 
   // Format timestamp
@@ -268,6 +325,58 @@ const CameraAnalytics = ({ elderId = 1, elderName = "John" }) => {
             </Select>
           </FormControl>
         </Box>
+
+        {/* Real-time Stream Analysis Status */}
+        {streamAnalysisStatus && (
+          <Alert 
+            severity={streamAnalysisStatus.active ? "success" : "info"}
+            sx={{ mb: 3 }}
+            icon={streamAnalysisStatus.active ? <Timeline /> : <Info />}
+            action={
+              <Button size="small" onClick={checkStreamAnalysisStatus}>
+                <Refresh />
+              </Button>
+            }
+          >
+            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+              🎥 Live Stream Analysis Status
+            </Typography>
+            {streamAnalysisStatus.active ? (
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="body2">
+                  ✅ <strong>{streamAnalysisStatus.total_active}</strong> camera streams active
+                </Typography>
+                <Typography variant="body2">
+                  🤖 <strong>{streamAnalysisStatus.vlm_active}</strong> with VLM analysis ready
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Analysis running every 15 seconds • Last updated: {new Date(streamAnalysisStatus.last_updated).toLocaleTimeString()}
+                </Typography>
+                {streamAnalysisStatus.cameras && streamAnalysisStatus.cameras.length > 0 && (
+                  <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {streamAnalysisStatus.cameras.map((cam, index) => (
+                      <Chip 
+                        key={index}
+                        size="small" 
+                        label={`Camera ${cam.camera_id}`}
+                        color={cam.vlm_ready ? "success" : "default"}
+                        variant={cam.vlm_ready ? "filled" : "outlined"}
+                      />
+                    ))}
+                  </Box>
+                )}
+              </Box>
+            ) : (
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                {streamAnalysisStatus.message || streamAnalysisStatus.error || "No active streams"}
+                <br />
+                <Typography variant="caption" color="text.secondary">
+                  Start a camera stream to enable real-time VLM analysis
+                </Typography>
+              </Typography>
+            )}
+          </Alert>
+        )}
 
         {/* Summary Cards */}
         {renderSummaryCards()}
