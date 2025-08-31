@@ -10,7 +10,16 @@ export default defineConfig({
     port: 3000,
     open: true,
     host: true, // Allow external connections
-    allowedHosts: true // Allow all hosts
+    allowedHosts: true,// Allow all hosts
+  proxy: {
+    '/api': {
+      target: 'http://localhost:8000',
+      changeOrigin: true,
+      secure: false,
+      rewrite: path => path.replace(/^\/api/, ''), 
+          },
+        },
+
   },
   resolve: {
     alias: {
