@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from api.routes import speech_routes, chat_routes, mqtt_routes, eldercare_routes, camera_routes, websocket_routes, devices_routes, analytics_routes
+from api.routes import speech_routes, chat_routes, mqtt_routes, eldercare_routes, camera_routes, websocket_routes, devices_routes, analytics_routes, smart_home_routes
 from api.services.mqtt_service import MQTTService
 from api.services.speech_service import SpeechToTextService
 import asyncio
@@ -101,6 +101,7 @@ app.include_router(camera_routes.router)
 app.include_router(websocket_routes.router)
 app.include_router(devices_routes.router)
 app.include_router(analytics_routes.router)
+app.include_router(smart_home_routes.router)
 
 @app.get("/")
 async def root():

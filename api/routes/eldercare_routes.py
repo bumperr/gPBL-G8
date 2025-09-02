@@ -59,6 +59,21 @@ async def voice_assistance(request: Dict[str, Any]):
             "timestamp": datetime.now().isoformat()
         }
         
+        # Handle MQTT commands for smart home actions
+        mqtt_commands = ai_response.get('mqtt_commands', [])
+        if mqtt_commands:
+            response_data["mqtt_commands"] = mqtt_commands
+            if mqtt_service:
+                for cmd in mqtt_commands:
+                    try:
+                        topic = cmd.get('topic')
+                        payload = cmd.get('payload', 'ON')
+                        if isinstance(payload, dict):
+                            payload = payload.get('state', 'ON')
+                        await mqtt_service.publish_message(topic, payload)
+                    except Exception as mqtt_error:
+                        print(f"MQTT command failed: {mqtt_error}")
+        
         # Handle emergency situations
         if ai_response.get('is_emergency'):
             emergency_alert = {
@@ -119,6 +134,21 @@ async def text_assistance(request: Dict[str, Any]):
             "timestamp": datetime.now().isoformat(),
             "elder_info": elder_info
         }
+        
+        # Handle MQTT commands for smart home actions
+        mqtt_commands = ai_response.get('mqtt_commands', [])
+        if mqtt_commands:
+            response_data["mqtt_commands"] = mqtt_commands
+            if mqtt_service:
+                for cmd in mqtt_commands:
+                    try:
+                        topic = cmd.get('topic')
+                        payload = cmd.get('payload', 'ON')
+                        if isinstance(payload, dict):
+                            payload = payload.get('state', 'ON')
+                        await mqtt_service.publish_message(topic, payload)
+                    except Exception as mqtt_error:
+                        print(f"MQTT command failed: {mqtt_error}")
         
         # Handle emergency situations
         if ai_response.get('is_emergency'):

@@ -15,9 +15,16 @@ const char *mqtt_server = "172.20.10.2";
 #define DHTTYPE DHT11
 DHT dht(DHTPIN, DHTTYPE);
 
-// --- LED ---
-#define LED_PIN 8
-String ledStatus = "OFF";
+// --- Multi-Room LEDs ---
+#define LIVING_ROOM_LED_PIN 8
+#define BEDROOM_LED_PIN 9
+#define KITCHEN_LED_PIN 10
+#define BATHROOM_LED_PIN 11
+
+String livingRoomLedStatus = "OFF";
+String bedroomLedStatus = "OFF";
+String kitchenLedStatus = "OFF";
+String bathroomLedStatus = "OFF";
 
 // --- OLED Display ---
 #define SCREEN_WIDTH 128
@@ -55,14 +62,41 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("]: ");
   Serial.println(message);
 
-  // Handle LED command
-  if (String(topic) == "home/led/cmd") {
+  // Handle multi-room LED commands
+  if (String(topic) == "home/living_room/lights/cmd") {
     if (message == "ON") {
-      digitalWrite(LED_PIN, HIGH);
-      ledStatus = "ON";
+      digitalWrite(LIVING_ROOM_LED_PIN, HIGH);
+      livingRoomLedStatus = "ON";
     } else if (message == "OFF") {
-      digitalWrite(LED_PIN, LOW);
-      ledStatus = "OFF";
+      digitalWrite(LIVING_ROOM_LED_PIN, LOW);
+      livingRoomLedStatus = "OFF";
+    }
+  }
+  else if (String(topic) == "home/bedroom/lights/cmd") {
+    if (message == "ON") {
+      digitalWrite(BEDROOM_LED_PIN, HIGH);
+      bedroomLedStatus = "ON";
+    } else if (message == "OFF") {
+      digitalWrite(BEDROOM_LED_PIN, LOW);
+      bedroomLedStatus = "OFF";
+    }
+  }
+  else if (String(topic) == "home/kitchen/lights/cmd") {
+    if (message == "ON") {
+      digitalWrite(KITCHEN_LED_PIN, HIGH);
+      kitchenLedStatus = "ON";
+    } else if (message == "OFF") {
+      digitalWrite(KITCHEN_LED_PIN, LOW);
+      kitchenLedStatus = "OFF";
+    }
+  }
+  else if (String(topic) == "home/bathroom/lights/cmd") {
+    if (message == "ON") {
+      digitalWrite(BATHROOM_LED_PIN, HIGH);
+      bathroomLedStatus = "ON";
+    } else if (message == "OFF") {
+      digitalWrite(BATHROOM_LED_PIN, LOW);
+      bathroomLedStatus = "OFF";
     }
   }
 
@@ -82,7 +116,11 @@ void reconnect() {
     Serial.print("Attempting MQTT connection...");
     if (client.connect("UNO_R4_Client")) {
       Serial.println("connected");
-      client.subscribe("home/led/cmd");
+      // Subscribe to multi-room LED commands
+      client.subscribe("home/living_room/lights/cmd");
+      client.subscribe("home/bedroom/lights/cmd");
+      client.subscribe("home/kitchen/lights/cmd");
+      client.subscribe("home/bathroom/lights/cmd");
       client.subscribe("home/room/data"); // subscribe to frontend topic
     } else {
       Serial.print("failed, rc=");
@@ -96,7 +134,12 @@ void reconnect() {
 void setup() {
   Serial.begin(115200);
   dht.begin();
-  pinMode(LED_PIN, OUTPUT);
+  
+  // Initialize multi-room LED pins
+  pinMode(LIVING_ROOM_LED_PIN, OUTPUT);
+  pinMode(BEDROOM_LED_PIN, OUTPUT);
+  pinMode(KITCHEN_LED_PIN, OUTPUT);
+  pinMode(BATHROOM_LED_PIN, OUTPUT);
 
   setup_wifi();
   client.setServer(mqtt_server, 1883);
@@ -139,8 +182,17 @@ void loop() {
   display.print("Target Humid: ");
   display.println(roomHumid + " %");
 
-  display.print("LED: ");
-  display.println(ledStatus);
+  display.print("Living: ");
+  display.println(livingRoomLedStatus);
+  
+  display.print("Bedroom: ");
+  display.println(bedroomLedStatus);
+  
+  display.print("Kitchen: ");
+  display.println(kitchenLedStatus);
+  
+  display.print("Bathroom: ");
+  display.println(bathroomLedStatus);
 
   display.display();
 

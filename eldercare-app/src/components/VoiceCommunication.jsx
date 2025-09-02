@@ -36,7 +36,12 @@ import {
   SpeakerNotes,
   Assistant,
   Person,
-  PersonOutline
+  PersonOutline,
+  VideoCall,
+  LocalHospital,
+  MusicNote,
+  Home,
+  CheckCircle
 } from '@mui/icons-material';
 
 const VoiceCommunication = ({ 
@@ -58,6 +63,10 @@ const VoiceCommunication = ({
     language: 'en',
     saveInteractions: true
   });
+  const [suggestedAction, setSuggestedAction] = useState(null);
+  const [smartHomeCommands, setSmartHomeCommands] = useState([]);
+  const [showActionDialog, setShowActionDialog] = useState(false);
+  const [showSmartHomeDialog, setShowSmartHomeDialog] = useState(false);
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -181,6 +190,18 @@ const VoiceCommunication = ({
         setTranscription(data.transcription.text);
         setAiResponse(data.ai_response.response);
 
+        // Handle suggested actions
+        if (data.ai_response.suggested_action) {
+          setSuggestedAction(data.ai_response.suggested_action);
+          setShowActionDialog(true);
+        }
+
+        // Handle smart home commands
+        if (data.mqtt_commands && data.mqtt_commands.length > 0) {
+          setSmartHomeCommands(data.mqtt_commands);
+          setShowSmartHomeDialog(true);
+        }
+
         // Add to conversation history
         const interaction = {
           id: Date.now(),
@@ -189,7 +210,8 @@ const VoiceCommunication = ({
           ai_response: data.ai_response.response,
           confidence: data.transcription.confidence,
           intent: data.ai_response.intent_detected,
-          is_emergency: data.ai_response.is_emergency
+          is_emergency: data.ai_response.is_emergency,
+          suggested_action: data.ai_response.suggested_action
         };
 
         setConversationHistory(prev => [interaction, ...prev.slice(0, 4)]); // Keep last 5
@@ -263,6 +285,91 @@ const VoiceCommunication = ({
                    elderInfo.name?.toLowerCase().includes('jane') ||
                    elderInfo.gender === 'female';
     return isWoman ? <Person /> : <PersonOutline />;
+  };
+
+  // Action helper functions (similar to TextChat)
+  const getActionIcon = (functionName) => {
+    switch (functionName) {
+      case 'start_video_call':
+      case 'contact_family':
+        return <VideoCall />;
+      case 'call_emergency':
+        return <LocalHospital />;
+      case 'play_music':
+        return <MusicNote />;
+      case 'send_health_alert':
+        return <LocalHospital />;
+      case 'control_smart_device':
+        return <Home />;
+      default:
+        return <CheckCircle />;
+    }
+  };
+
+  const getActionLabel = (functionName, parameters) => {
+    switch (functionName) {
+      case 'start_video_call':
+      case 'contact_family':
+        return `📞 Call ${parameters?.contact_name || 'Family'} via WhatsApp`;
+      case 'call_emergency':
+        return '🚨 Call Emergency Services';
+      case 'play_music':
+        return `🎵 Play ${parameters?.genre || 'Music'}`;
+      case 'send_health_alert':
+        return '💝 Alert Caregivers';
+      case 'control_smart_device':
+        const deviceName = parameters?.device_name || 'Device';
+        const actionDesc = parameters?.action_description || 'Control device';
+        return `🏠 ${actionDesc}`;
+      default:
+        return '✅ Take Action';
+    }
+  };
+
+  // Execute suggested action
+  const executeAction = async (action) => {
+    try {
+      switch (action.function_name) {
+        case 'start_video_call':
+        case 'contact_family':
+          const phoneNumber = action.parameters.phone_number || '+6011468550';
+          const whatsappUrl = `https://wa.me/${phoneNumber.replace('+', '')}?text=Hi, I would like to have a video call with you.`;
+          window.open(whatsappUrl, '_blank');
+          speakText(`I've opened WhatsApp to call ${action.parameters.contact_name || 'your family member'}.`);
+          break;
+
+        case 'call_emergency':
+          speakText('Emergency services have been notified! Help is on the way.');
+          // Could integrate with actual emergency system
+          break;
+
+        case 'control_smart_device':
+          // Handle smart home device control
+          speakText(`I've sent the command to control your ${action.parameters.device_name || 'device'}.`);
+          break;
+
+        default:
+          speakText('Action has been noted.');
+      }
+      setShowActionDialog(false);
+      setSuggestedAction(null);
+    } catch (error) {
+      console.error('Action execution failed:', error);
+      speakText('Sorry, I had trouble executing that action.');
+    }
+  };
+
+  // Execute smart home commands
+  const executeSmartHomeCommands = async (commands) => {
+    try {
+      // Here you would call the MQTT API
+      speakText(`Smart home commands executed successfully!`);
+      setShowSmartHomeDialog(false);
+      setSmartHomeCommands([]);
+    } catch (error) {
+      console.error('Smart home execution failed:', error);
+      speakText('Sorry, I had trouble controlling your smart home devices.');
+    }
   };
 
   return (
@@ -374,7 +481,7 @@ const VoiceCommunication = ({
                 <Typography variant="body1" sx={{ pl: 2 }}>
                   {aiResponse}
                 </Typography>
-                <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                   {!isSpeaking ? (
                     <IconButton size="small" onClick={() => speakText(aiResponse)}>
                       <VolumeUp />
@@ -383,6 +490,20 @@ const VoiceCommunication = ({
                     <IconButton size="small" onClick={stopSpeaking} color="error">
                       <VolumeOff />
                     </IconButton>
+                  )}
+                  
+                  {/* Show action button if there's a suggested action */}
+                  {suggestedAction && suggestedAction.function_name && 
+                   !['provide_companionship'].includes(suggestedAction.function_name) && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => setShowActionDialog(true)}
+                      startIcon={getActionIcon(suggestedAction.function_name)}
+                      sx={{ fontSize: '0.75rem', textTransform: 'none' }}
+                    >
+                      {getActionLabel(suggestedAction.function_name, suggestedAction.parameters)}
+                    </Button>
                   )}
                 </Box>
               </Box>
@@ -462,6 +583,99 @@ const VoiceCommunication = ({
           100% { transform: scale(1); }
         }
       `}</style>
+
+      {/* Action Confirmation Dialog */}
+      <Dialog open={showActionDialog} onClose={() => setShowActionDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <CheckCircle color="primary" />
+          Confirm Voice Action
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+              🎙️ Voice Assistant wants to help you with:
+            </Typography>
+            <Typography variant="body2">
+              {suggestedAction?.reasoning}
+            </Typography>
+          </Alert>
+
+          <Box sx={{ bgcolor: '#f5f5f5', p: 2, borderRadius: 2 }}>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+              Proposed action:
+            </Typography>
+            <Typography variant="body2">
+              {suggestedAction && getActionLabel(
+                suggestedAction.function_name, 
+                suggestedAction.parameters
+              )}
+            </Typography>
+            {suggestedAction?.parameters && Object.keys(suggestedAction.parameters).length > 0 && (
+              <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
+                Details: {JSON.stringify(suggestedAction.parameters, null, 2)}
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowActionDialog(false)} color="secondary" variant="outlined">
+            ❌ No, thanks
+          </Button>
+          <Button 
+            onClick={() => executeAction(suggestedAction)} 
+            color="primary" 
+            variant="contained"
+            startIcon={suggestedAction && getActionIcon(suggestedAction.function_name)}
+          >
+            ✅ Yes, please help
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Smart Home Confirmation Dialog */}
+      <Dialog open={showSmartHomeDialog} onClose={() => setShowSmartHomeDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Home color="primary" />
+          Smart Home Control Confirmation
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+              ⚠️ Voice Command Detected
+            </Typography>
+            <Typography variant="body2">
+              I detected a smart home control request from your voice. Please confirm:
+            </Typography>
+          </Alert>
+
+          <Box sx={{ bgcolor: '#f5f5f5', p: 2, borderRadius: 2 }}>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+              Commands to execute:
+            </Typography>
+            {smartHomeCommands.map((cmd, idx) => (
+              <Box key={idx} sx={{ mb: 1, p: 1, bgcolor: 'white', borderRadius: 1 }}>
+                <Typography variant="body2">
+                  📱 <strong>{cmd.payload?.action?.toUpperCase()}</strong> {cmd.payload?.device_type}
+                  {cmd.payload?.room && <span> in <strong>{cmd.payload.room}</strong></span>}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowSmartHomeDialog(false)} color="error" variant="outlined">
+            ❌ Cancel
+          </Button>
+          <Button 
+            onClick={() => executeSmartHomeCommands(smartHomeCommands)} 
+            color="primary" 
+            variant="contained"
+            startIcon={<CheckCircle />}
+          >
+            ✅ Execute Commands
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 };

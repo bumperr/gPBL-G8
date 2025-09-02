@@ -5,6 +5,7 @@ import asyncio
 from typing import Dict, List, Any, Optional
 from .device_service import DeviceService
 from .mqtt_service import MQTTService
+from .intent_database_service import IntentDatabaseService
 
 class AIService:
     def __init__(self):
@@ -12,6 +13,7 @@ class AIService:
         self.vision_model = "llava:7b"  # Vision model for image processing
         self.device_service = DeviceService()
         self.mqtt_service = MQTTService()
+        self.intent_db = IntentDatabaseService()
         
         # Define available functions for AI reasoning
         self.available_functions = {
@@ -410,27 +412,50 @@ Remember you are speaking to an elderly person, so use clear, simple language an
             conversation_response = await self.chat_completion(conversation_prompt)
             clean_response = conversation_response.get('response', 'I understand and I\'m here to help you.')
             
-            # Step 2: Use keyword-based analysis with device database
+            # Step 2: Use database-driven intent detection
             print(f"Analyzing message: {message}")  # Debug log
-            message_lower = message.lower()
             
-            # Enhanced keyword detection with device database
+            # Detect intent using database
+            detected_intent = self.intent_db.detect_intent_from_keywords(message)
             analysis_data = {}
             
-            # Check for family contact keywords
-            family_keywords = ['call', 'phone', 'talk to', 'contact', 'reach', 'sarah', 'family', 'daughter', 'son', 'ring', 'dial']
-            if any(keyword in message_lower for keyword in family_keywords):
-                print(f"Family contact detected with keywords: {[k for k in family_keywords if k in message_lower]}")
-                analysis_data = {
-                    "intent": "family_contact",
-                    "confidence": 0.9,
-                    "action_needed": "start_video_call",
-                    "action_params": {"contact_name": default_family_contact['name'], "phone_number": default_family_contact['phone']},
-                    "risk_level": "low",
-                    "reasoning": f"Elder wants to contact {default_family_contact['name']}"
-                }
-            # Check for temperature-related requests with reasoning capability
-            elif any(temp_keyword in message_lower for temp_keyword in ['cold', 'warm', 'hot', 'temperature', 'thermostat', 'heating', 'cooling', 'adjust temp', 'too cold', 'too warm', 'suggest temp']):
+            if detected_intent:
+                intent_name = detected_intent['intent']
+                confidence = detected_intent['confidence']
+                
+                print(f"Intent detected from database: {intent_name} (confidence: {confidence:.2f})")
+                
+                # Get available actions for this intent
+                actions = self.intent_db.get_intent_actions(intent_name)
+                
+                if actions:
+                    # Select the best action (first one for now)
+                    best_action = actions[0]
+                    
+                    # Generate parameters using database defaults and context
+                    action_params = self.intent_db.generate_action_parameters(
+                        best_action['function_name'], 
+                        elder_info, 
+                        message
+                    )
+                    
+                    analysis_data = {
+                        "intent": intent_name,
+                        "confidence": confidence,
+                        "action_needed": best_action['function_name'],
+                        "action_params": action_params,
+                        "risk_level": best_action['risk_level'],
+                        "reasoning": f"Database-detected intent: {best_action['description']}",
+                        "mqtt_topic": best_action['mqtt_topic'],
+                        "mqtt_payload_template": best_action['mqtt_payload_template'],
+                        "arduino_compatible": best_action['arduino_compatible']
+                    }
+            # Check for environmental subtlety - dark room detection  
+            elif any(dark_keyword in message_lower for dark_keyword in ['room is dark', 'dark in here', 'too dark', 'can\'t see', 'need light', 'it\'s dark', 'getting dark']):
+                print(f"Dark room detected, suggesting lights")
+                return await self._handle_dark_room(message, elder_info)
+            # Check for temperature-related requests with reasoning capability  
+            elif any(temp_keyword in message_lower for temp_keyword in ['cold', 'warm', 'hot', 'temperature', 'thermostat', 'heating', 'cooling', 'adjust temp', 'too cold', 'too warm', 'suggest temp', 'house is cold', 'house feels cold']):
                 print(f"Temperature reasoning request detected")
                 # Use enhanced temperature reasoning
                 return await self._enhanced_temperature_reasoning(message, elder_info)
@@ -850,8 +875,22 @@ Remember you are speaking to an elderly person, so use clear, simple language an
             recommended_temp = reasoning_data.get("recommended_temperature", 22.0)
             
             # Step 3: Generate response and suggested action
-            natural_response = f"""I can see you're feeling {('cold' if 'cold' in message.lower() else 'warm')}. Let me check the current conditions for you.
+            # Check if this is a "house is cold" situation (whole house vs single room)
+            is_house_wide = any(house_keyword in message.lower() for house_keyword in ['house is cold', 'house feels cold', 'whole house', 'entire house'])
             
+            if is_house_wide:
+                natural_response = f"""I can see you're feeling cold throughout the house. Let me check the current conditions for you.
+                
+Current temperature is {current_temp}°C with {current_humidity}% humidity, and your thermostat is set to {thermostat_setting}°C.
+
+Based on these readings, I recommend setting the thermostat to {recommended_temp}°C to warm up the entire house. {reasoning_data.get('reasoning', '')}
+
+I can also turn on lights in multiple rooms to create a warmer, more comfortable atmosphere throughout the house.
+
+Would you like me to adjust the thermostat and turn on some lights?"""
+            else:
+                natural_response = f"""I can see you're feeling {('cold' if 'cold' in message.lower() else 'warm')}. Let me check the current conditions for you.
+                
 Current room temperature is {current_temp}°C with {current_humidity}% humidity, and your thermostat is set to {thermostat_setting}°C.
 
 Based on these readings and your comfort needs, I recommend setting the thermostat to {recommended_temp}°C. {reasoning_data.get('reasoning', '')}
@@ -888,6 +927,76 @@ Would you like me to adjust the thermostat to this temperature?"""
             return {
                 "response": f"I'm having trouble reading the current temperature conditions. If you're feeling too cold or warm, I can help you adjust the thermostat manually. What temperature would you prefer?",
                 "intent_detected": "smart_home",
+                "confidence_score": 0.7,
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def _handle_dark_room(self, message: str, elder_info: Dict = None) -> Dict[str, Any]:
+        """Handle dark room detection and suggest appropriate lighting"""
+        try:
+            print(f"=== Dark Room Detection for: '{message}' ===")
+            
+            # Detect which room if mentioned
+            room_detected = None
+            message_lower = message.lower()
+            if 'living room' in message_lower or 'lounge' in message_lower:
+                room_detected = 'living_room'
+            elif 'bedroom' in message_lower:
+                room_detected = 'bedroom'
+            elif 'kitchen' in message_lower:
+                room_detected = 'kitchen'
+            elif 'bathroom' in message_lower:
+                room_detected = 'bathroom'
+            else:
+                # Default to living room if no room specified
+                room_detected = 'living_room'
+            
+            # Map room to appropriate response and action
+            room_names = {
+                'living_room': 'living room',
+                'bedroom': 'bedroom', 
+                'kitchen': 'kitchen',
+                'bathroom': 'bathroom'
+            }
+            
+            room_name = room_names.get(room_detected, 'living room')
+            
+            natural_response = f"""I can see it's getting dark in the {room_name}. Let me turn on the lights for you to help you see better and stay safe.
+            
+Would you like me to turn on the {room_name} light?"""
+            
+            return {
+                "response": natural_response,
+                "intent_detected": "smart_home_lighting",
+                "confidence_score": 0.95,
+                "suggested_action": {
+                    "function_name": "control_arduino_room_light",
+                    "parameters": {
+                        "room_name": room_detected,
+                        "led_state": "ON",
+                        "arduino_pin": {'living_room': '8', 'bedroom': '9', 'kitchen': '10', 'bathroom': '11'}[room_detected]
+                    },
+                    "reasoning": f"Room appears dark, turning on {room_name} light for safety and visibility",
+                    "requires_confirmation": True
+                },
+                "mqtt_commands": [{
+                    "topic": f"home/{room_detected}/lights/cmd",
+                    "payload": {"state": "ON"}
+                }],
+                "mental_health_assessment": {
+                    "risk_level": "low",
+                    "recommendations": "Proper lighting improves safety and mood"
+                },
+                "is_emergency": False,
+                "success": True,
+                "environmental_reasoning": True
+            }
+            
+        except Exception as e:
+            return {
+                "response": f"I can help you with lighting. Which room would you like me to brighten up?",
+                "intent_detected": "smart_home_lighting",
                 "confidence_score": 0.7,
                 "success": False,
                 "error": str(e)
