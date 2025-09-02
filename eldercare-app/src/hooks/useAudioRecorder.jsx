@@ -29,10 +29,31 @@ const useAudioRecorder = () => {
       streamRef.current = stream;
       chunksRef.current = [];
       
-      // Create MediaRecorder
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
-      });
+      // Create MediaRecorder with fallback formats
+      let mediaRecorder;
+      
+      // Prioritize WAV first, then fallback to WebM which backend can convert
+      const formats = [
+        'audio/wav',
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/mp4'
+      ];
+      
+      for (const format of formats) {
+        if (MediaRecorder.isTypeSupported(format)) {
+          console.log(`Using audio format: ${format}`);
+          mediaRecorder = new MediaRecorder(stream, { mimeType: format });
+          break;
+        }
+      }
+      
+      // Fallback to default if none supported
+      if (!mediaRecorder) {
+        console.log('Using default MediaRecorder format');
+        mediaRecorder = new MediaRecorder(stream);
+      }
       
       mediaRecorderRef.current = mediaRecorder;
       
@@ -43,9 +64,9 @@ const useAudioRecorder = () => {
       };
       
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(chunksRef.current, { 
-          type: 'audio/webm;codecs=opus' 
-        });
+        // Use the same mime type that was used for recording
+        const mimeType = mediaRecorder.mimeType || 'audio/webm;codecs=opus';
+        const audioBlob = new Blob(chunksRef.current, { type: mimeType });
         const audioURL = URL.createObjectURL(audioBlob);
         
         setAudioBlob(audioBlob);
@@ -108,7 +129,7 @@ const useAudioRecorder = () => {
     }
   }, [audioURL]);
 
-  // Convert audio blob to base64 for API transmission
+  // Convert audio blob to base64 for API transmission with format information
   const getAudioBase64 = useCallback(() => {
     return new Promise((resolve, reject) => {
       if (!audioBlob) {
@@ -118,8 +139,14 @@ const useAudioRecorder = () => {
       
       const reader = new FileReader();
       reader.onload = () => {
-        const base64 = reader.result.split(',')[1]; // Remove data:audio/webm;base64, prefix
-        resolve(base64);
+        const base64 = reader.result.split(',')[1]; // Remove data:audio/[format];base64, prefix
+        resolve({
+          data: base64,
+          mimeType: audioBlob.type,
+          format: audioBlob.type.includes('wav') ? 'wav' : 
+                  audioBlob.type.includes('webm') ? 'webm' : 
+                  audioBlob.type.includes('ogg') ? 'ogg' : 'unknown'
+        });
       };
       reader.onerror = reject;
       reader.readAsDataURL(audioBlob);

@@ -22,6 +22,7 @@ async def voice_assistance(request: Dict[str, Any]):
         audio_data = request.get('audio_data')
         elder_info = request.get('elder_info', {})
         language = request.get('language', 'en')
+        audio_format = request.get('audio_format', 'webm')
         
         if not audio_data:
             raise HTTPException(status_code=400, detail="Audio data is required")
@@ -30,8 +31,12 @@ async def voice_assistance(request: Dict[str, Any]):
         from api.services.speech_service import SpeechToTextService
         speech_service = SpeechToTextService()
         
-        # Transcribe audio
-        transcription = await speech_service.transcribe_audio(audio_data, language)
+        # Transcribe audio with format information
+        transcription = await speech_service.transcribe_audio(
+            audio_data, 
+            language,
+            model="whisper" if audio_format in ["webm", "ogg"] else "google"
+        )
         
         if not transcription.get('text'):
             return {

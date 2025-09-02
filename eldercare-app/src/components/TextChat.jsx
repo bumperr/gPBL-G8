@@ -36,15 +36,9 @@ import {
   LocalHospital,
   MusicNote,
   People,
-  Mic,
-  MicOff,
-  PlayArrow,
-  Pause,
-  VolumeUp,
-  Download
+  VolumeUp
 } from '@mui/icons-material';
 import apiService from '../services/api';
-import useAudioRecorder from '../hooks/useAudioRecorder';
 
 // Add CSS animations
 const styles = `
@@ -97,9 +91,6 @@ const TextChat = ({ elderInfo, onIntentDetected, enableVoiceMessages = false, on
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // Voice recording functionality
-  const audioRecorder = useAudioRecorder();
-  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
 
   const scrollToBottom = () => {
     // Only scroll if the messagesEndRef is within the messages container
@@ -149,10 +140,50 @@ What would you like to talk about today?`,
   const handleImageUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
-      setSelectedImage(file);
-      const reader = new FileReader();
-      reader.onload = (e) => setImagePreview(e.target.result);
-      reader.readAsDataURL(file);
+      // Check file size and optimize if too large
+      const maxSize = 5 * 1024 * 1024; // 5MB limit
+      if (file.size > maxSize) {
+        alert('Image is too large. Please select an image smaller than 5MB for better processing speed.');
+        return;
+      }
+      
+      // Create optimized version for faster processing
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = document.createElement('img');
+      
+      img.onload = () => {
+        // Calculate optimal dimensions for faster processing (max 512px width/height)
+        const maxDimension = 512;
+        let { width, height } = img;
+        
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = (height * maxDimension) / width;
+            width = maxDimension;
+          } else {
+            width = (width * maxDimension) / height;
+            height = maxDimension;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convert to optimized blob
+        canvas.toBlob((blob) => {
+          setSelectedImage(blob);
+          setImagePreview(URL.createObjectURL(blob));
+          
+          // Show optimization info if image was resized
+          if (img.width > maxDimension || img.height > maxDimension) {
+            console.log(`Image optimized: ${img.width}x${img.height} → ${width}x${height} for faster processing`);
+          }
+        }, 'image/jpeg', 0.75); // Use JPEG with 75% quality for smaller file size
+      };
+      
+      img.src = URL.createObjectURL(file);
     }
   };
 
@@ -194,6 +225,7 @@ What would you like to talk about today?`,
         formData.append('image', currentImage);
 
         response = await apiService.chatWithImage(formData);
+        console.log('Image upload response:', response); // Debug log
         removeImage(); // Clear image after sending
       } else {
         // Send text-only message to eldercare text assistance
@@ -264,10 +296,21 @@ What would you like to talk about today?`,
 
     } catch (error) {
       console.error('Text chat error:', error);
+      let errorContent = "I'm sorry, I'm having trouble understanding right now. Could you please try again?";
+      
+      // Provide specific error message for image uploads
+      if (currentImage) {
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          errorContent = "Image analysis is taking longer than usual. The image might be large or complex. Please try with a smaller image or wait and try again.";
+        } else {
+          errorContent = "I had trouble analyzing your image. Please make sure the image is clear and try uploading again.";
+        }
+      }
+      
       const errorMessage = {
         id: Date.now() + 1,
         type: 'ai',
-        content: "I'm sorry, I'm having trouble understanding right now. Could you please try again?",
+        content: errorContent,
         timestamp: new Date(),
         isError: true
       };
@@ -476,163 +519,6 @@ What would you like to talk about today?`,
     }
   };
 
-  // Handle voice message recording and processing
-  const handleVoiceMessage = async () => {
-    if (audioRecorder.isRecording) {
-      // Stop recording
-      audioRecorder.stopRecording();
-      
-      if (audioRecorder.audioBlob) {
-        setIsProcessingVoice(true);
-        
-        try {
-          // Store audio locally with a unique filename
-          const timestamp = new Date().toISOString().replace(/[:]/g, '-');
-          const audioFileName = `voice_message_${timestamp}.webm`;
-          
-          // Create a local URL for the audio blob
-          const localAudioUrl = URL.createObjectURL(audioRecorder.audioBlob);
-          
-          // Store audio blob in localStorage (if small enough) or just keep the URL
-          const audioData = {
-            fileName: audioFileName,
-            blob: audioRecorder.audioBlob,
-            url: localAudioUrl,
-            timestamp: timestamp,
-            duration: audioRecorder.durationSeconds
-          };
-
-          // Add voice message to chat immediately
-          const voiceMessage = {
-            id: Date.now(),
-            type: 'user',
-            content: '🎤 Voice message (stored locally)',
-            isVoice: true,
-            audioUrl: localAudioUrl,
-            duration: audioRecorder.durationSeconds,
-            timestamp: new Date(),
-            audioData: audioData
-          };
-          
-          setMessages(prev => [...prev, voiceMessage]);
-
-          // Optionally process voice with AI (can be disabled for local storage only)
-          try {
-            // Convert audio to base64 for API
-            const base64Audio = await new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result.split(',')[1]);
-              reader.onerror = reject;
-              reader.readAsDataURL(audioRecorder.audioBlob);
-            });
-
-            const response = await apiService.processElderSpeech(base64Audio, elderInfo);
-          
-            // Add transcription and AI response
-            const transcriptionMessage = {
-              id: Date.now() + 1,
-              type: 'transcription',
-              content: `"${response.transcription?.text || 'Audio processed'}"`,
-              originalVoiceId: voiceMessage.id
-            };
-
-            const aiMessage = {
-              id: Date.now() + 2,
-              type: 'ai',
-              content: response.ai_response?.response || 'I heard your message.',
-              intentDetected: response.ai_response?.intent_detected,
-              suggestedAction: response.ai_response?.suggested_action,
-              timestamp: new Date()
-            };
-
-            setMessages(prev => [...prev, transcriptionMessage, aiMessage]);
-            
-            // Handle intents and actions like regular text chat
-            if (response.ai_response && onIntentDetected) {
-              onIntentDetected(response.ai_response);
-            }
-
-            // Call the voice message callback
-            if (onVoiceMessage) {
-              onVoiceMessage({
-                type: 'voice',
-                transcription: response.transcription,
-                aiResponse: response.ai_response,
-                timestamp: new Date(),
-                audioBlob: audioRecorder.audioBlob,
-                audioData: audioData
-              });
-            }
-
-            // Handle smart home commands
-            if (response.mqtt_commands?.length > 0) {
-              setSmartHomeDialog({
-                open: true,
-                commands: response.mqtt_commands,
-                message: response.transcription?.text || 'Voice command'
-              });
-            }
-
-          } catch (aiError) {
-            // AI processing failed, but audio is still stored locally
-            console.warn('AI processing failed, but voice message saved locally:', aiError);
-            const warningMessage = {
-              id: Date.now() + 1,
-              type: 'ai',
-              content: "Voice message saved locally. AI processing is temporarily unavailable.",
-              isWarning: true,
-              timestamp: new Date()
-            };
-            setMessages(prev => [...prev, warningMessage]);
-            
-            // Still call the voice message callback with local data
-            if (onVoiceMessage) {
-              onVoiceMessage({
-                type: 'voice',
-                timestamp: new Date(),
-                audioBlob: audioRecorder.audioBlob,
-                audioData: audioData,
-                aiProcessingFailed: true
-              });
-            }
-          }
-
-        } catch (error) {
-          console.error('Voice recording error:', error);
-          const errorMessage = {
-            id: Date.now() + 1,
-            type: 'ai',
-            content: "Sorry, there was an error with your voice message. Please try again.",
-            isError: true
-          };
-          setMessages(prev => [...prev, errorMessage]);
-        } finally {
-          setIsProcessingVoice(false);
-          audioRecorder.clearRecording();
-        }
-      }
-    } else {
-      // Start recording
-      audioRecorder.startRecording();
-    }
-  };
-
-  // Function to download audio file locally
-  const downloadAudioFile = (audioData) => {
-    try {
-      // Create download link
-      const link = document.createElement('a');
-      link.href = audioData.url;
-      link.download = audioData.fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      console.log(`Downloaded audio file: ${audioData.fileName}`);
-    } catch (error) {
-      console.error('Failed to download audio file:', error);
-    }
-  };
 
   const getActionIcon = (functionName) => {
     switch (functionName) {
@@ -830,13 +716,30 @@ What would you like to talk about today?`,
         <div ref={messagesEndRef} />
       </Box>
 
-      {/* Image Preview - Compact */}
+      {/* Image Preview - Enhanced */}
       {imagePreview && (
-        <Box sx={{ p: 1, borderTop: '1px solid #e0e0e0', backgroundColor: '#f8f9fa' }}>
+        <Box sx={{ p: 1, borderTop: '1px solid #e0e0e0', backgroundColor: '#f0f8f0' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <img src={imagePreview} alt="Preview" style={{ width: 40, height: 40, borderRadius: '4px' }} />
-            <Typography variant="caption">Image attached</Typography>
-            <IconButton size="small" onClick={removeImage} sx={{ ml: 'auto', p: 0.5 }}>
+            <img 
+              src={imagePreview} 
+              alt="Preview" 
+              style={{ 
+                width: 50, 
+                height: 50, 
+                borderRadius: '8px',
+                objectFit: 'cover',
+                border: '2px solid #4caf50'
+              }} 
+            />
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="caption" sx={{ color: '#2e7d32', fontWeight: 500 }}>
+                📷 Image optimized for fast analysis
+              </Typography>
+              <Typography variant="caption" sx={{ display: 'block', color: '#666' }}>
+                Resized to 512px max • Ask me what you see in this image
+              </Typography>
+            </Box>
+            <IconButton size="small" onClick={removeImage} sx={{ color: '#f44336', p: 0.5 }}>
               <Close fontSize="small" />
             </IconButton>
           </Box>
@@ -869,22 +772,6 @@ What would you like to talk about today?`,
           <PhotoCamera fontSize="small" />
         </IconButton>
 
-        {enableVoiceMessages && (
-          <IconButton
-            onClick={handleVoiceMessage}
-            disabled={isProcessingVoice}
-            size="small"
-            sx={{ color: audioRecorder.isRecording ? '#f44336' : '#2196f3' }}
-          >
-            {isProcessingVoice ? (
-              <VolumeUp fontSize="small" />
-            ) : audioRecorder.isRecording ? (
-              <MicOff fontSize="small" />
-            ) : (
-              <Mic fontSize="small" />
-            )}
-          </IconButton>
-        )}
 
         <TextField
           fullWidth
@@ -916,11 +803,11 @@ What would you like to talk about today?`,
         </IconButton>
       </Box>
 
-      {/* Loading indicator */}
+      {/* Status indicators */}
       {isLoading && (
         <Box sx={{ p: 1, textAlign: 'center', backgroundColor: '#f8f9fa', borderTop: '1px solid #e0e0e0' }}>
           <Typography variant="caption" sx={{ opacity: 0.7 }}>
-            AI is thinking...
+            {imagePreview ? '🖼️ Analyzing image... This may take up to 2 minutes.' : 'AI is thinking...'}
           </Typography>
         </Box>
       )}

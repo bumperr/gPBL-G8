@@ -54,12 +54,13 @@ export const apiService = {
   },
 
   // Voice assistance for elders
-  async processElderSpeech(audioData, elderInfo, language = 'en') {
+  async processElderSpeech(audioData, elderInfo, language = 'en', audioFormat = 'webm') {
     try {
       const response = await api.post('/eldercare/voice-assistance', {
         audio_data: audioData,
         elder_info: elderInfo,
-        language
+        language,
+        audio_format: audioFormat
       });
       return response.data;
     } catch (error) {
@@ -208,6 +209,7 @@ export const apiService = {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        timeout: 120000, // 2 minutes timeout for image processing
       });
       return response.data;
     } catch (error) {

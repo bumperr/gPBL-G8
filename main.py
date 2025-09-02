@@ -8,7 +8,7 @@ import asyncio
 
 
 # Global services - Use network MQTT broker IP
-mqtt_service = MQTTService(broker="10.136.133.66", port=1883)
+mqtt_service = MQTTService(broker="127.0.0.1", port=1883)
 speech_service = SpeechToTextService()
 
 # Initialize VLM service for video analysis

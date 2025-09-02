@@ -208,6 +208,7 @@ Remember you are speaking to an elderly person, so use clear, simple language an
             if image_data:
                 # For LLaVA model, we need a specific format
                 try:
+                    print(f"Processing image with {model_to_use} model...")
                     response = ollama.chat(
                         model=model_to_use,
                         messages=[
@@ -216,17 +217,30 @@ Remember you are speaking to an elderly person, so use clear, simple language an
                                 'content': f"{system_prompt}\n\nUser message: {message}\n\nPlease analyze the image and respond helpfully.",
                                 'images': [image_data]
                             }
-                        ]
+                        ],
+                        options={
+                            'temperature': 0.7,
+                            'num_predict': 300,  # Shorter response for speed
+                            'num_ctx': 2048      # Smaller context window for speed
+                        },
+                        stream=False  # Ensure no streaming for consistent timing
                     )
                     ai_response = response['message']['content']
+                    print("Image processing completed successfully")
                     
                 except Exception as vision_error:
                     print(f"Vision model error: {vision_error}")
-                    # Fallback - check if it's logo.png and provide a helpful response
-                    if "logo" in message.lower():
-                        ai_response = "I can see you've shared a logo image with me. While I'm still loading my vision capabilities, I can help you with questions about logos or branding once my image processing model (LLaVA:7b) is ready. In the meantime, you can describe what you'd like to know about the logo and I'll do my best to help!"
+                    error_msg = str(vision_error).lower()
+                    
+                    # Check for specific error types
+                    if "timeout" in error_msg or "connection" in error_msg:
+                        ai_response = "I'm sorry, the image processing took longer than expected. The image might be large or complex. Could you try with a smaller image, or describe what you'd like to know about it?"
+                    elif "model" in error_msg or "not found" in error_msg:
+                        ai_response = "My image analysis model is currently starting up. This usually takes a moment. Please try again in a few seconds, or describe what you'd like to know about the image."
+                    elif "logo" in message.lower():
+                        ai_response = "I can see you've shared a logo image with me. While I'm having some trouble with image processing right now, I can help you with questions about logos or branding once the system is ready. In the meantime, you can describe what you'd like to know about the logo and I'll do my best to help!"
                     else:
-                        ai_response = "I can see you've shared an image with me, but I'm having trouble analyzing it right now. My image processing model (LLaVA:7b) is currently loading. Could you describe what you'd like to know about the image?"
+                        ai_response = "I can see you've shared an image with me, but I'm having trouble analyzing it right now. This might be due to the image size or complexity. Could you try with a smaller image, or describe what you'd like to know about it?"
             else:
                 # Standard text-only processing
                 messages = context or []

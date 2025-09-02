@@ -61,13 +61,27 @@ async def chat_with_image(
         # Parse elder_info if provided
         elder_info_dict = json.loads(elder_info) if elder_info else None
         
-        response = await ai_service.enhanced_chat(
-            message=message,
-            chat_type=chat_type,
-            model=model,
-            elder_info=elder_info_dict,
-            image_data=image_data
-        )
+        # Add timeout to prevent long waits
+        import asyncio
+        try:
+            response = await asyncio.wait_for(
+                ai_service.enhanced_chat(
+                    message=message,
+                    chat_type=chat_type,
+                    model=model,
+                    elder_info=elder_info_dict,
+                    image_data=image_data
+                ),
+                timeout=90.0  # 90 second timeout
+            )
+        except asyncio.TimeoutError:
+            # Fallback response if processing takes too long
+            response = {
+                "response": "I can see you've shared an image with me, but the analysis is taking longer than expected. This might be due to system load. Could you try again in a moment, or describe what you'd like to know about the image?",
+                "chat_type": chat_type,
+                "has_image": True,
+                "processing_timeout": True
+            }
         
         # Execute MQTT commands if any
         if response.get('mqtt_commands'):

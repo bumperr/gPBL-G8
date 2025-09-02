@@ -64,14 +64,15 @@ const AudioRecorder = ({ onMessageSent, elderInfo }) => {
     setSendError('');
 
     try {
-      // Convert audio to base64
-      const audioBase64 = await getAudioBase64();
+      // Convert audio to base64 with format information
+      const audioInfo = await getAudioBase64();
       
       // Process speech with AI assistance
       const response = await apiService.processElderSpeech(
-        audioBase64,
+        audioInfo.data,
         elderInfo || { name: 'Elder User' },
-        'en'
+        'en',
+        audioInfo.format
       );
 
       if (response.status === 'success') {
@@ -103,10 +104,12 @@ const AudioRecorder = ({ onMessageSent, elderInfo }) => {
       
       // Fallback: still try to send raw audio for manual review
       try {
-        const audioBase64 = await getAudioBase64();
+        const audioInfo = await getAudioBase64();
         await apiService.sendMQTTMessage('elder/voice_raw', JSON.stringify({
           type: 'raw_voice_message',
-          audio: audioBase64,
+          audio: audioInfo.data,
+          format: audioInfo.format,
+          mimeType: audioInfo.mimeType,
           duration: durationSeconds,
           elderInfo: elderInfo || { name: 'Elder User' },
           timestamp: new Date().toISOString(),
@@ -267,8 +270,8 @@ const AudioRecorder = ({ onMessageSent, elderInfo }) => {
           </Box>
         )}
 
-        {/* Recording Instructions */}
-        {!isRecording && !audioURL && (
+        {/* Recording Instructions and Status */}
+        {!isRecording && !audioURL && !isSending && (
           <Typography 
             variant="body2" 
             color="text.secondary" 
@@ -276,6 +279,17 @@ const AudioRecorder = ({ onMessageSent, elderInfo }) => {
           >
             Tap "Start Recording" to send a voice message to your caregivers or ask for assistance
           </Typography>
+        )}
+
+        {isSending && (
+          <Box sx={{ textAlign: 'center', mt: 2 }}>
+            <Typography variant="body2" color="primary" sx={{ mb: 1 }}>
+              🔄 Processing your voice message...
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Please wait while we transcribe and analyze your message
+            </Typography>
+          </Box>
         )}
       </Box>
     </Paper>
