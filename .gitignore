@@ -208,11 +208,11 @@ Thumbs.db
 *.mkv
 
 # Image files (snapshots)
-*.jpg
-*.jpeg
-*.png
-*.gif
-*.bmp
+# *.jpg
+# *.jpeg
+# *.png
+# *.gif
+# *.bmp
 
 # Claude Code specific
 .claude/
