@@ -131,25 +131,60 @@ def init_intent_actions_database():
         (intent_ids['emergency'], 'pain', 1.8, 'medical'),
         (intent_ids['emergency'], 'hurt', 1.8, 'medical'),
         (intent_ids['emergency'], 'fall', 2.0, 'medical'),
+        (intent_ids['emergency'], 'fell', 2.0, 'medical'),
+        (intent_ids['emergency'], 'fell down', 2.2, 'medical'),
         (intent_ids['emergency'], 'sick', 1.5, 'medical'),
         (intent_ids['emergency'], 'ambulance', 2.0, 'medical'),
         (intent_ids['emergency'], '911', 2.5, 'emergency_number'),
+        (intent_ids['emergency'], 'chest pain', 2.2, 'medical'),
+        (intent_ids['emergency'], 'urgent help', 2.0, 'urgent'),
         
-        # Arduino LED control (from script.ino)
+        # Arduino LED control (room-specific from SmartHomeControls)
         (intent_ids['arduino_led_control'], 'led', 2.0, 'arduino_device'),
         (intent_ids['arduino_led_control'], 'light', 1.8, 'arduino_device'),
+        (intent_ids['arduino_led_control'], 'lights', 1.8, 'arduino_device'),
         (intent_ids['arduino_led_control'], 'turn on', 1.5, 'arduino_action'),
         (intent_ids['arduino_led_control'], 'turn off', 1.5, 'arduino_action'),
         (intent_ids['arduino_led_control'], 'switch on', 1.5, 'arduino_action'),
         (intent_ids['arduino_led_control'], 'switch off', 1.5, 'arduino_action'),
+        # Room-specific keywords
+        (intent_ids['arduino_led_control'], 'living room', 1.8, 'room_location'),
+        (intent_ids['arduino_led_control'], 'bedroom', 1.8, 'room_location'),
+        (intent_ids['arduino_led_control'], 'kitchen', 1.8, 'room_location'),
+        (intent_ids['arduino_led_control'], 'bathroom', 1.8, 'room_location'),
+        # Environmental context
+        (intent_ids['arduino_led_control'], 'dark', 1.5, 'environmental'),
+        (intent_ids['arduino_led_control'], 'room is dark', 2.0, 'environmental'),
+        (intent_ids['arduino_led_control'], 'the room is dark', 2.0, 'environmental'),
+        (intent_ids['arduino_led_control'], 'it\'s dark', 1.8, 'environmental'),
+        (intent_ids['arduino_led_control'], 'too dark', 1.8, 'environmental'),
+        (intent_ids['arduino_led_control'], 'getting dark', 1.5, 'environmental'),
+        (intent_ids['arduino_led_control'], 'can\'t see', 1.8, 'environmental'),
+        (intent_ids['arduino_led_control'], 'need light', 1.8, 'environmental'),
         
         # Temperature monitoring (from DHT11 in script.ino)
         (intent_ids['temperature_monitoring'], 'temperature', 2.0, 'arduino_sensor'),
         (intent_ids['temperature_monitoring'], 'humidity', 1.8, 'arduino_sensor'),
         (intent_ids['temperature_monitoring'], 'too hot', 1.5, 'comfort'),
         (intent_ids['temperature_monitoring'], 'too cold', 1.5, 'comfort'),
+        (intent_ids['temperature_monitoring'], 'cold', 1.3, 'comfort'),
+        (intent_ids['temperature_monitoring'], 'hot', 1.3, 'comfort'),
+        (intent_ids['temperature_monitoring'], 'warm', 1.2, 'comfort'),
+        (intent_ids['temperature_monitoring'], 'it is too cold', 1.8, 'comfort'),
+        (intent_ids['temperature_monitoring'], 'feeling cold', 1.5, 'comfort'),
         (intent_ids['temperature_monitoring'], 'room temp', 1.8, 'arduino_sensor'),
         (intent_ids['temperature_monitoring'], 'thermostat', 1.5, 'climate_control'),
+        (intent_ids['temperature_monitoring'], 'set temperature', 2.0, 'climate_control'),
+        (intent_ids['temperature_monitoring'], 'degrees', 1.5, 'temperature_unit'),
+        # Temperature control actions
+        (intent_ids['temperature_monitoring'], 'turn up heat', 2.0, 'climate_control'),
+        (intent_ids['temperature_monitoring'], 'turn heat up', 2.0, 'climate_control'),
+        (intent_ids['temperature_monitoring'], 'make it warmer', 1.8, 'climate_control'),
+        (intent_ids['temperature_monitoring'], 'increase temperature', 2.0, 'climate_control'),
+        (intent_ids['temperature_monitoring'], 'adjust thermostat', 1.8, 'climate_control'),
+        (intent_ids['temperature_monitoring'], 'warmer', 1.3, 'comfort'),
+        (intent_ids['temperature_monitoring'], 'heat up', 1.5, 'climate_control'),
+        (intent_ids['temperature_monitoring'], 'raise temperature', 1.8, 'climate_control'),
         
         # General smart home
         (intent_ids['smart_home'], 'smart home', 2.0, 'automation'),
@@ -164,7 +199,11 @@ def init_intent_actions_database():
         
         # Social keywords
         (intent_ids['loneliness'], 'lonely', 2.0, 'emotional'),
+        (intent_ids['loneliness'], 'I am lonely', 2.2, 'emotional'),
         (intent_ids['loneliness'], 'sad', 1.5, 'emotional'),
+        (intent_ids['loneliness'], 'I am sad', 1.8, 'emotional'),
+        (intent_ids['loneliness'], 'depressed', 1.8, 'emotional'),
+        (intent_ids['loneliness'], 'worried', 1.5, 'emotional'),
         (intent_ids['loneliness'], 'talk', 1.2, 'social'),
         (intent_ids['conversation'], 'hello', 1.0, 'greeting'),
         (intent_ids['conversation'], 'how are you', 1.2, 'greeting'),
@@ -185,13 +224,13 @@ def init_intent_actions_database():
         (intent_ids['emergency'], 'Call Emergency Services', 'call_emergency', 'Call 911 or emergency services', 1, 'high', None, None, 0, 1),
         (intent_ids['emergency'], 'Send Health Alert', 'send_health_alert', 'Alert caregivers about health concern', 1, 'medium', None, None, 0, 1),
         
-        # Arduino LED control actions (based on script.ino)
-        (intent_ids['arduino_led_control'], 'Turn On Arduino LED', 'control_arduino_led', 'Turn on LED connected to Arduino pin 8', 1, 'low', 'home/led/cmd', 'ON', 1, 1),
-        (intent_ids['arduino_led_control'], 'Turn Off Arduino LED', 'control_arduino_led', 'Turn off LED connected to Arduino pin 8', 1, 'low', 'home/led/cmd', 'OFF', 1, 1),
+        # Arduino LED control actions (room-specific based on SmartHomeControls)
+        (intent_ids['arduino_led_control'], 'Control Room Light', 'control_arduino_room_light', 'Control LED lights in specific rooms', 1, 'low', 'home/{room}/lights/cmd', '{{"state": "{led_state}"}}', 1, 1),
         
         # Temperature monitoring actions (based on DHT11 sensor)
         (intent_ids['temperature_monitoring'], 'Read Room Temperature', 'read_arduino_sensors', 'Get temperature and humidity from DHT11 sensor', 0, 'low', 'home/dht11', None, 1, 1),
-        (intent_ids['temperature_monitoring'], 'Set Target Temperature', 'set_target_temperature', 'Set target temperature for room', 1, 'low', 'home/room/data', '{temperature},{humidity}', 1, 1),
+        (intent_ids['temperature_monitoring'], 'Set Target Temperature', 'set_target_temperature', 'Set target temperature for room', 1, 'low', 'home/room/data', '{target_temperature},{target_humidity}', 1, 1),
+        (intent_ids['temperature_monitoring'], 'Control Thermostat', 'control_thermostat', 'Control room thermostat setting', 1, 'low', 'home/room/data', '{target_temperature},50', 1, 1),
         
         # Smart home general actions
         (intent_ids['smart_home'], 'Control Smart Device', 'control_smart_device', 'Control various smart home devices', 1, 'medium', None, None, 0, 1),
@@ -231,14 +270,18 @@ def init_intent_actions_database():
         (action_ids['call_emergency'], 'reason', 'string', 'General emergency', 'Reason for emergency call', 0, None),
         (action_ids['call_emergency'], 'location', 'string', 'Home', 'Location of emergency', 0, None),
         
-        # Arduino LED control parameters (based on script.ino)
-        (action_ids['control_arduino_led'], 'led_state', 'string', 'ON', 'LED state: ON or OFF', 1, '^(ON|OFF)$'),
-        (action_ids['control_arduino_led'], 'device_pin', 'integer', '8', 'Arduino pin number for LED', 0, None),
+        # Arduino room light control parameters (based on SmartHomeControls)
+        (action_ids['control_arduino_room_light'], 'room_name', 'string', 'living_room', 'Room name: living_room, bedroom, kitchen, bathroom', 1, '^(living_room|bedroom|kitchen|bathroom)$'),
+        (action_ids['control_arduino_room_light'], 'led_state', 'string', 'ON', 'LED state: ON or OFF', 1, '^(ON|OFF)$'),
+        (action_ids['control_arduino_room_light'], 'arduino_pin', 'string', '8', 'Arduino pin: 8=living_room, 9=bedroom, 10=kitchen, 11=bathroom', 0, '^(8|9|10|11)$'),
         
         # Temperature monitoring parameters
         (action_ids['read_arduino_sensors'], 'sensor_type', 'string', 'DHT11', 'Type of sensor to read', 0, None),
         (action_ids['set_target_temperature'], 'target_temperature', 'integer', '22', 'Target temperature in Celsius', 1, '^[1-3][0-9]$'),
         (action_ids['set_target_temperature'], 'target_humidity', 'integer', '50', 'Target humidity percentage', 0, '^[0-9]{1,2}$'),
+        
+        # Control thermostat parameters
+        (action_ids['control_thermostat'], 'target_temperature', 'integer', '22', 'Target temperature in Celsius', 1, '^[1-3][0-9]$'),
         
         # Smart device parameters
         (action_ids['control_smart_device'], 'device_name', 'string', None, 'Name of device to control', 1, None),

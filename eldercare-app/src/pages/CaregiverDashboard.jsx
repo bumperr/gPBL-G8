@@ -264,15 +264,23 @@ const CaregiverDashboard = ({ caregiverInfo }) => {
     return () => clearInterval(interval);
   }, []);
 
-  // WebSocket connection for real-time MQTT updates
+  // Polling for real-time MQTT updates (fallback if WebSocket fails)
   useEffect(() => {
-    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/smart-home`;
+    // First try WebSocket connection
+    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//localhost:8000/ws/smart-home`;
     console.log('CaregiverDashboard: Attempting WebSocket connection to:', wsUrl);
     const ws = new WebSocket(wsUrl);
+    
+    let pollInterval = null;
     
     ws.onopen = () => {
       console.log('WebSocket connected for smart home updates');
       setServerStatus('connected');
+      // Clear polling interval if WebSocket connects
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
     };
     
     ws.onmessage = (event) => {
@@ -349,15 +357,74 @@ const CaregiverDashboard = ({ caregiverInfo }) => {
     ws.onerror = (error) => {
       console.error('WebSocket error:', error);
       setServerStatus('disconnected');
+      
+      // Start polling as fallback if WebSocket fails
+      if (!pollInterval) {
+        console.log('Starting polling fallback for smart home updates');
+        pollInterval = setInterval(async () => {
+          try {
+            const response = await fetch('/smart-home/status');
+            if (response.ok) {
+              const data = await response.json();
+              console.log('Polling update received:', data);
+              
+              // Update thermostat with current temperature and humidity
+              if (data.raw_state && data.raw_state.sensors) {
+                setSmartHomeControls(prev => ({
+                  ...prev,
+                  thermostat: {
+                    ...prev.thermostat,
+                    current_temp: data.raw_state.sensors.temperature || prev.thermostat.current_temp,
+                    humidity: data.raw_state.sensors.humidity || prev.thermostat.humidity
+                  }
+                }));
+              }
+            }
+          } catch (error) {
+            console.error('Polling error:', error);
+          }
+        }, 2000); // Poll every 2 seconds
+      }
     };
     
     ws.onclose = () => {
       console.log('WebSocket disconnected');
       setServerStatus('disconnected');
+      
+      // Start polling as fallback if WebSocket closes
+      if (!pollInterval) {
+        console.log('Starting polling fallback for smart home updates');
+        pollInterval = setInterval(async () => {
+          try {
+            const response = await fetch('/smart-home/status');
+            if (response.ok) {
+              const data = await response.json();
+              console.log('Polling update received:', data);
+              
+              // Update thermostat with current temperature and humidity
+              if (data.raw_state && data.raw_state.sensors) {
+                setSmartHomeControls(prev => ({
+                  ...prev,
+                  thermostat: {
+                    ...prev.thermostat,
+                    current_temp: data.raw_state.sensors.temperature || prev.thermostat.current_temp,
+                    humidity: data.raw_state.sensors.humidity || prev.thermostat.humidity
+                  }
+                }));
+              }
+            }
+          } catch (error) {
+            console.error('Polling error:', error);
+          }
+        }, 2000); // Poll every 2 seconds
+      }
     };
     
     return () => {
       ws.close();
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
     };
   }, []);
 

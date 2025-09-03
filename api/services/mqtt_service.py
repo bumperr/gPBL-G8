@@ -5,7 +5,7 @@ from typing import Optional, Callable
 import threading
 
 class MQTTService:
-    def __init__(self, broker: str = "172.20.10.2", port: int = 1883):
+    def __init__(self, broker: str = "127.0.0.1", port: int = 1883):
         self.broker = broker
         self.port = port
         self.client: Optional[mqtt.Client] = None

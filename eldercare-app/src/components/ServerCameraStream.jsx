@@ -24,7 +24,7 @@ import {
   CameraAlt,
   Refresh,
   Settings,
-  Error,
+  Error as ErrorIcon,
   CheckCircle,
   Visibility,
   VisibilityOff
@@ -57,25 +57,59 @@ const ServerCameraStream = ({
   // Load available cameras
   const loadAvailableCameras = async () => {
     try {
-      const response = await fetch(`/api/camera/available`);
+      const response = await fetch(`http://localhost:8000/camera/available`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Backend API not available (got HTML instead of JSON)');
+      }
+      
       const data = await response.json();
       
       if (data.success) {
         setAvailableCameras(data.cameras);
         console.log('Available cameras loaded:', data.cameras);
+        
+        // Update selected camera if current selection is not available
+        const currentCameraExists = data.cameras.some(cam => cam.id === selectedCamera && cam.available);
+        if (!currentCameraExists && data.cameras.length > 0) {
+          const firstAvailableCamera = data.cameras.find(cam => cam.available);
+          if (firstAvailableCamera) {
+            setSelectedCamera(firstAvailableCamera.id);
+            console.log('Updated selected camera to:', firstAvailableCamera.id);
+          }
+        }
       } else {
         console.error('Failed to load cameras:', data);
+        setError('Camera service returned error');
       }
     } catch (error) {
       console.error('Error loading cameras:', error);
-      setError('Failed to load available cameras');
+      setError(`Camera API unavailable: ${error.message}`);
     }
   };
 
   // Check camera status
   const checkCameraStatus = async () => {
     try {
-      const response = await fetch(`/api/camera/status`);
+      const response = await fetch(`http://localhost:8000/camera/status`);
+      
+      if (!response.ok) {
+        setCameraStatus('offline');
+        return;
+      }
+      
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.log('Camera API not available (backend server not running)');
+        setCameraStatus('offline');
+        return;
+      }
+      
       const data = await response.json();
       
       if (data.success) {
@@ -97,7 +131,7 @@ const ServerCameraStream = ({
       setError(null);
       
       // Start camera on server
-      const startResponse = await fetch(`/api/camera/start/${selectedCamera}`, {
+      const startResponse = await fetch(`http://localhost:8000/camera/start/${selectedCamera}`, {
         method: 'POST'
       });
       const startData = await startResponse.json();
@@ -136,7 +170,7 @@ const ServerCameraStream = ({
       }
       
       // Stop camera on server
-      const stopResponse = await fetch(`/api/camera/stop/${selectedCamera}`, {
+      const stopResponse = await fetch(`http://localhost:8000/camera/stop/${selectedCamera}`, {
         method: 'POST'
       });
       
@@ -156,7 +190,7 @@ const ServerCameraStream = ({
   // Fetch latest frame from server
   const fetchLatestFrame = async () => {
     try {
-      const response = await fetch(`/api/camera/frame/${selectedCamera}`);
+      const response = await fetch(`http://localhost:8000/camera/frame/${selectedCamera}`);
       const data = await response.json();
       
       if (data.success && data.frame) {
@@ -174,7 +208,7 @@ const ServerCameraStream = ({
   // Take snapshot
   const takeSnapshot = async () => {
     try {
-      const response = await fetch(`/api/camera/snapshot/${selectedCamera}`);
+      const response = await fetch(`http://localhost:8000/camera/snapshot/${selectedCamera}`);
       const data = await response.json();
       
       if (data.success) {
@@ -232,7 +266,7 @@ const ServerCameraStream = ({
 
   // Get MJPEG stream URL
   const getMjpegStreamUrl = () => {
-    return `/api/camera/stream/${selectedCamera}`;
+    return `/camera/stream/${selectedCamera}`;
   };
 
   return (
@@ -265,7 +299,7 @@ const ServerCameraStream = ({
               label={cameraStatus} 
               color={cameraStatus === 'online' ? 'success' : 'error'} 
               size="small" 
-              icon={cameraStatus === 'online' ? <CheckCircle /> : <Error />}
+              icon={cameraStatus === 'online' ? <CheckCircle /> : <ErrorIcon />}
             />
             {showControls && (
               <Button
@@ -312,7 +346,7 @@ const ServerCameraStream = ({
               <MenuItem disabled sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                 📷 Live Cameras
               </MenuItem>
-              {availableCameras.filter(cam => cam.available && cam.type === 'camera').map((camera) => (
+              {availableCameras.filter(cam => cam.available && (cam.type === 'camera' || (!cam.type && !cam.virtual))).map((camera) => (
                 <MenuItem key={camera.id} value={camera.id} sx={{ pl: 3 }}>
                   📷 {camera.name} - {camera.width}x{camera.height}
                 </MenuItem>
@@ -459,8 +493,7 @@ const ServerCameraStream = ({
                 startIcon={isLoading ? <CircularProgress size={20} /> : <Videocam />}
                 onClick={startStreaming}
                 disabled={isLoading || cameraStatus === 'offline'}
-                fullWidth={{ xs: true, sm: false }}
-                sx={{ minWidth: { sm: 120 } }}
+                sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 120 } }}
               >
                 Start Stream
               </Button>
@@ -471,8 +504,7 @@ const ServerCameraStream = ({
                 startIcon={<Stop />}
                 onClick={stopStreaming}
                 disabled={isLoading}
-                fullWidth={{ xs: true, sm: false }}
-                sx={{ minWidth: { sm: 120 } }}
+                sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 120 } }}
               >
                 Stop Stream
               </Button>
@@ -483,8 +515,7 @@ const ServerCameraStream = ({
               startIcon={<CameraAlt />}
               onClick={takeSnapshot}
               disabled={!isStreaming || isLoading}
-              fullWidth={{ xs: true, sm: false }}
-              sx={{ minWidth: { sm: 100 } }}
+              sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 100 } }}
             >
               Snapshot
             </Button>
@@ -494,8 +525,7 @@ const ServerCameraStream = ({
               startIcon={<Refresh />}
               onClick={loadAvailableCameras}
               disabled={isLoading}
-              fullWidth={{ xs: true, sm: false }}
-              sx={{ minWidth: { sm: 100 } }}
+              sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 100 } }}
             >
               Refresh
             </Button>
@@ -538,7 +568,14 @@ const ServerCameraStream = ({
       </CardContent>
 
       {/* Settings Dialog */}
-      <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={settingsOpen} 
+        onClose={() => setSettingsOpen(false)} 
+        maxWidth="sm" 
+        fullWidth
+        disableEnforceFocus
+        disableAutoFocus
+      >
         <DialogTitle>Camera Settings</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>

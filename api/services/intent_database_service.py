@@ -92,6 +92,42 @@ class IntentDatabaseService:
             'matched_keywords': [k for k in intent_scores.keys() if intent_scores[k] > 0]
         }
     
+    def select_best_action(self, intent_name: str, message: str) -> Dict[str, Any]:
+        """
+        Select the best action for an intent based on message content
+        
+        Args:
+            intent_name: Name of the intent
+            message: Original user message
+            
+        Returns:
+            Best matching action information
+        """
+        actions = self.get_intent_actions(intent_name)
+        if not actions:
+            return None
+            
+        # For temperature monitoring, prioritize control actions over sensor reading
+        if intent_name == 'temperature_monitoring':
+            control_keywords = ['turn', 'set', 'adjust', 'increase', 'decrease', 'raise', 'lower', 'warmer', 'cooler', 'heat up', 'cool down']
+            message_lower = message.lower()
+            
+            # If message contains control keywords, prefer control actions
+            if any(keyword in message_lower for keyword in control_keywords):
+                control_actions = [a for a in actions if 'control' in a['function_name'] or 'set' in a['function_name']]
+                if control_actions:
+                    return control_actions[0]  # Return first control action
+            
+            # If message asks about temperature without control intent, prefer sensor reading
+            read_keywords = ['what', 'check', 'show', 'tell', 'current', 'now']
+            if any(keyword in message_lower for keyword in read_keywords):
+                read_actions = [a for a in actions if 'read' in a['function_name'] or 'sensor' in a['function_name']]
+                if read_actions:
+                    return read_actions[0]
+        
+        # Default: return first action
+        return actions[0] if actions else None
+
     def get_intent_actions(self, intent_name: str, arduino_only: bool = False) -> List[Dict[str, Any]]:
         """
         Get available actions for an intent
@@ -268,7 +304,7 @@ class IntentDatabaseService:
                 elif 'bathroom' in message_lower or 'toilet' in message_lower or 'washroom' in message_lower:
                     param_value = 'bathroom'
             elif param_name == 'arduino_pin':
-                # Map room to Arduino pin based on script.ino
+                # Map room to Arduino pin based on SmartHomeControls configuration
                 room_pin_map = {
                     'living_room': '8',
                     'bedroom': '9', 
@@ -276,14 +312,59 @@ class IntentDatabaseService:
                     'bathroom': '11'
                 }
                 # Get room from parameters or detect from message
-                room = parameters.get('room_name', param_info['default'])
-                param_value = room_pin_map.get(room, param_info['default'])
+                room = parameters.get('room_name')
+                if not room:
+                    # Try to detect from message first
+                    message_lower = message.lower()
+                    if 'living room' in message_lower or 'lounge' in message_lower:
+                        room = 'living_room'
+                    elif 'bedroom' in message_lower or 'sleeping room' in message_lower:
+                        room = 'bedroom'
+                    elif 'kitchen' in message_lower or 'cooking area' in message_lower:
+                        room = 'kitchen'
+                    elif 'bathroom' in message_lower or 'toilet' in message_lower or 'washroom' in message_lower:
+                        room = 'bathroom'
+                    else:
+                        room = 'living_room'  # Default room
+                param_value = room_pin_map.get(room, '8')  # Default to pin 8 if room not found
             elif param_name == 'target_temperature':
-                # Look for temperature values in message
+                # Look for temperature values in message - enhanced patterns
                 import re
-                temp_match = re.search(r'(\d+)\s*(?:degrees?|°)', message.lower())
+                message_lower = message.lower()
+                temp_match = None
+                
+                # Try different temperature patterns
+                patterns = [
+                    r'to\s+(\d+)',  # "set temperature to 24"
+                    r'(\d+)\s*(?:degrees?|°)',  # "24 degrees"
+                    r'up.*?(\d+)',  # "turn up heat by 5" 
+                    r'(\d+)\s*(?:celsius|c)',  # "22 celsius"
+                ]
+                
+                for pattern in patterns:
+                    temp_match = re.search(pattern, message_lower)
+                    if temp_match:
+                        break
+                
                 if temp_match:
-                    param_value = temp_match.group(1)
+                    temp_value = int(temp_match.group(1))
+                    # Validate temperature range (reasonable room temperature)
+                    if 16 <= temp_value <= 30:
+                        param_value = str(temp_value)
+                    else:
+                        # Default to slightly warmer temperature for control requests
+                        control_keywords = ['turn up', 'warmer', 'heat up', 'increase']
+                        if any(keyword in message_lower for keyword in control_keywords):
+                            param_value = '25'  # Default warmer setting
+                        else:
+                            param_value = param_info['default']
+                else:
+                    # Default to slightly warmer temperature for control requests
+                    control_keywords = ['turn up', 'warmer', 'heat up', 'increase']
+                    if any(keyword in message_lower for keyword in control_keywords):
+                        param_value = '25'  # Default warmer setting
+                    else:
+                        param_value = param_info['default']
             
             parameters[param_name] = param_value
             

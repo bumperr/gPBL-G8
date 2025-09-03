@@ -331,8 +331,12 @@ class CameraService:
         """Stream frames from real video files in video_sample folder"""
         import os
         
-        # Path to video file
+        # Path to video file - normalize the path
         video_path = os.path.join(os.path.dirname(__file__), '..', '..', 'video_sample', video_filename)
+        video_path = os.path.normpath(video_path)
+        
+        print(f"Attempting to open video file: {video_path}")
+        print(f"File exists: {os.path.exists(video_path)}")
         
         try:
             # Open video file with OpenCV
@@ -340,8 +344,21 @@ class CameraService:
             
             if not cap.isOpened():
                 print(f"Error: Could not open video file {video_path}")
-                # Fallback to virtual streaming
-                return self._stream_video_sample(camera_id)
+                print("Trying alternative video backends...")
+                
+                # Try different backends
+                for backend in [cv2.CAP_FFMPEG, cv2.CAP_DSHOW, cv2.CAP_MSMF]:
+                    try:
+                        cap = cv2.VideoCapture(video_path, backend)
+                        if cap.isOpened():
+                            print(f"Successfully opened with backend {backend}")
+                            break
+                    except:
+                        continue
+                
+                if not cap.isOpened():
+                    print("All video backends failed. Fallback to virtual streaming")
+                    return self._stream_video_sample(camera_id)
             
             # Get video properties
             fps = int(cap.get(cv2.CAP_PROP_FPS)) or 15
@@ -364,8 +381,14 @@ class CameraService:
                     frame_count = 0
                     
                     if not ret:
-                        print(f"Error: Cannot read video file {video_path}")
+                        print(f"Error: Cannot read video file {video_path} after loop restart")
                         break
+                
+                if ret and frame is not None:
+                    print(f"Successfully read frame {frame_count} from {video_filename}")
+                else:
+                    print(f"Failed to read frame {frame_count} from {video_filename}")
+                    continue
                 
                 try:
                     # Resize frame if needed

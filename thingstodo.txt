@@ -1,0 +1,3 @@
+[x]detect why all intention as emergency while it supposed to be more specific in which relating to the dataset of possible action  and the arduino topic  
+[-]camera and vidoe testing,
+[]testing with arduino

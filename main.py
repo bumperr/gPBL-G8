@@ -8,7 +8,7 @@ import asyncio
 
 
 # Global services - Use network MQTT broker IP
-mqtt_service = MQTTService(broker="127.0.0.1", port=1883)
+mqtt_service = MQTTService(broker="localhost", port=1883)
 speech_service = SpeechToTextService()
 
 # Initialize VLM service for video analysis
@@ -38,6 +38,7 @@ async def lifespan(app: FastAPI):
     speech_routes.mqtt_service = mqtt_service
     eldercare_routes.mqtt_service = mqtt_service
     mqtt_routes.mqtt_service = mqtt_service
+    smart_home_routes.mqtt_service = mqtt_service
     
     # Initialize WebSocket with MQTT service
     from api.routes.websocket_routes import initialize_websocket_with_mqtt

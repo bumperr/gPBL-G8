@@ -1,4 +1,4 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Dict, List, Any
@@ -15,8 +15,12 @@ class MQTTCommand(BaseModel):
     topic: str
     payload: str
 
-# MQTT Service instance
-mqtt_service = MQTTService()
+# MQTT Service instance - will be set by main.py
+mqtt_service = None
+
+def get_mqtt_service():
+    """Dependency to get MQTT service"""
+    return mqtt_service
 
 @router.websocket("/ws/arduino-status")
 async def websocket_endpoint(websocket: WebSocket):
@@ -69,22 +73,49 @@ async def send_mqtt_command(command: MQTTCommand):
         raise HTTPException(status_code=500, detail=f"MQTT command failed: {str(e)}")
 
 @router.get("/status")
-async def get_smart_home_status():
+async def get_smart_home_status(service = Depends(get_mqtt_service)):
     """Get current smart home device status"""
-    # This could be enhanced to read from a database or cache
+    # Debug: Check if mqtt_service is set
+    if service is None:
+        return {
+            "error": "MQTT service not initialized",
+            "lights": {"living_room": False, "bedroom": False, "kitchen": False, "bathroom": False},
+            "thermostat": {"target_temp": 22, "current_temp": 23.5, "humidity": 65},
+            "last_updated": None
+        }
+    
+    # Get real state from MQTT service
+    current_state = service.get_current_state()
+    
     return {
         "lights": {
-            "living_room": False,
+            "living_room": current_state.get("devices", {}).get("led") == "ON",
             "bedroom": False, 
             "kitchen": False,
             "bathroom": False
         },
         "thermostat": {
-            "target_temp": 22,
-            "current_temp": 23.5,
-            "humidity": 65
+            "target_temp": current_state.get("devices", {}).get("thermostat_target", 22),
+            "current_temp": current_state.get("sensors", {}).get("temperature", 23.5),
+            "humidity": current_state.get("sensors", {}).get("humidity", 65)
         },
-        "last_updated": mqtt_service._get_timestamp() if hasattr(mqtt_service, '_get_timestamp') else None
+        "last_updated": current_state.get("sensors", {}).get("last_update"),
+        "raw_state": current_state,  # Include raw state for debugging
+        "mqtt_service_status": "initialized" if service else "not_initialized"
+    }
+
+@router.get("/state")
+async def get_smart_home_state():
+    """Get current smart home state - matches frontend WebSocket expectation"""
+    return mqtt_service.get_current_state() if mqtt_service else {"error": "MQTT service not initialized"}
+
+@router.get("/debug")
+async def debug_endpoint():
+    """Debug endpoint to check if changes are working"""
+    return {
+        "message": "Debug endpoint working",
+        "mqtt_service_available": mqtt_service is not None,
+        "timestamp": "2025-09-03T08:27:00"
     }
 
 @router.post("/lights/{room}/toggle")

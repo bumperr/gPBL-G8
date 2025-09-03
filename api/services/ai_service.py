@@ -414,6 +414,7 @@ Remember you are speaking to an elderly person, so use clear, simple language an
             
             # Step 2: Use database-driven intent detection
             print(f"Analyzing message: {message}")  # Debug log
+            message_lower = message.lower()
             
             # Detect intent using database
             detected_intent = self.intent_db.detect_intent_from_keywords(message)
@@ -425,13 +426,10 @@ Remember you are speaking to an elderly person, so use clear, simple language an
                 
                 print(f"Intent detected from database: {intent_name} (confidence: {confidence:.2f})")
                 
-                # Get available actions for this intent
-                actions = self.intent_db.get_intent_actions(intent_name)
+                # Get the best action for this intent based on message content
+                best_action = self.intent_db.select_best_action(intent_name, message)
                 
-                if actions:
-                    # Select the best action (first one for now)
-                    best_action = actions[0]
-                    
+                if best_action:
                     # Generate parameters using database defaults and context
                     action_params = self.intent_db.generate_action_parameters(
                         best_action['function_name'], 
@@ -450,17 +448,8 @@ Remember you are speaking to an elderly person, so use clear, simple language an
                         "mqtt_payload_template": best_action['mqtt_payload_template'],
                         "arduino_compatible": best_action['arduino_compatible']
                     }
-            # Check for environmental subtlety - dark room detection  
-            elif any(dark_keyword in message_lower for dark_keyword in ['room is dark', 'dark in here', 'too dark', 'can\'t see', 'need light', 'it\'s dark', 'getting dark']):
-                print(f"Dark room detected, suggesting lights")
-                return await self._handle_dark_room(message, elder_info)
-            # Check for temperature-related requests with reasoning capability  
-            elif any(temp_keyword in message_lower for temp_keyword in ['cold', 'warm', 'hot', 'temperature', 'thermostat', 'heating', 'cooling', 'adjust temp', 'too cold', 'too warm', 'suggest temp', 'house is cold', 'house feels cold']):
-                print(f"Temperature reasoning request detected")
-                # Use enhanced temperature reasoning
-                return await self._enhanced_temperature_reasoning(message, elder_info)
-            # Check for smart home devices using database
             else:
+                # If no database intent detected, check other patterns
                 # Find matching devices from database
                 matched_devices = self.device_service.find_device_by_keyword(message)
                 

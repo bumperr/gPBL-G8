@@ -109,11 +109,25 @@ def initialize_websocket_with_mqtt(mqtt_service: MQTTService):
     def mqtt_callback(topic: str, message: str):
         """MQTT callback that safely creates async tasks"""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.create_task(broadcast_mqtt_update(topic, message))
-            else:
-                loop.run_until_complete(broadcast_mqtt_update(topic, message))
+            # Get or create an event loop
+            try:
+                loop = asyncio.get_running_loop()
+                # Schedule the coroutine to run in the current loop
+                loop.create_task(broadcast_mqtt_update(topic, message))
+            except RuntimeError:
+                # No running loop, create a new one
+                import threading
+                def run_async_task():
+                    try:
+                        new_loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(new_loop)
+                        new_loop.run_until_complete(broadcast_mqtt_update(topic, message))
+                        new_loop.close()
+                    except Exception as e:
+                        print(f"Error in async task thread for {topic}: {e}")
+                
+                thread = threading.Thread(target=run_async_task, daemon=True)
+                thread.start()
         except Exception as e:
             print(f"Error in MQTT callback for {topic}: {e}")
     

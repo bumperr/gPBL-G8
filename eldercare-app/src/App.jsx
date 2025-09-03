@@ -113,6 +113,15 @@ const RoleSelection = ({ onUserSetup }) => {
       age: role === 'elder' ? 78 : undefined,
       family_contact_name: role === 'elder' ? 'Sarah' : undefined,
       family_phone: role === 'elder' ? '+6011468550' : undefined,
+      emergency_contact_name: role === 'elder' ? 'Sarah' : undefined,
+      emergency_contact_phone: role === 'elder' ? '+6011468550' : undefined,
+      // Medical information for elder
+      medical_conditions: role === 'elder' ? ['hypertension', 'mild dementia', 'arthritis'] : undefined,
+      medications: role === 'elder' ? ['Lisinopril 10mg daily', 'Acetaminophen as needed', 'Multivitamin'] : undefined,
+      allergies: role === 'elder' ? ['penicillin', 'shellfish'] : undefined,
+      care_level: role === 'elder' ? 'assisted' : undefined,
+      preferred_language: role === 'elder' ? 'en' : undefined,
+      // Caregiver specific fields
       role: role === 'caregiver' ? 'Family Caregiver' : undefined,
       elder_name: role === 'caregiver' ? 'John' : undefined
     };
