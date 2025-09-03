@@ -89,10 +89,10 @@ async def get_smart_home_status(service = Depends(get_mqtt_service)):
     
     return {
         "lights": {
-            "living_room": current_state.get("devices", {}).get("led") == "ON",
-            "bedroom": False, 
-            "kitchen": False,
-            "bathroom": False
+            "living_room": current_state.get("devices", {}).get("living_room_led") == "ON",
+            "bedroom": current_state.get("devices", {}).get("bedroom_led") == "ON", 
+            "kitchen": current_state.get("devices", {}).get("kitchen_led") == "ON",
+            "bathroom": current_state.get("devices", {}).get("bathroom_led") == "ON"
         },
         "thermostat": {
             "target_temp": current_state.get("devices", {}).get("thermostat_target", 22),

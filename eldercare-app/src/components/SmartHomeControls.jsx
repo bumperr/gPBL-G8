@@ -76,26 +76,88 @@ const SmartHomeControls = ({ elderInfo, onSpeakText }) => {
   // WebSocket connection for real-time Arduino feedback
   useEffect(() => {
     const connectWebSocket = () => {
-      const ws = new WebSocket(`ws://localhost:8000/ws/arduino-status`);
+      console.log('🔌 Attempting WebSocket connection to ws://localhost:8000/ws/smart-home');
+      const ws = new WebSocket(`ws://localhost:8000/ws/smart-home`);
+      
+      ws.onopen = () => {
+        console.log('✅ WebSocket connected successfully');
+      };
+      
+      ws.onclose = (event) => {
+        console.log('❌ WebSocket disconnected:', event.code, event.reason);
+      };
+      
+      ws.onerror = (error) => {
+        console.error('🚨 WebSocket error:', error);
+      };
       
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          console.log('📨 WebSocket message received:', data);
           
-          // Update room light states from Arduino feedback
-          if (data.type === 'light_status') {
-            setRoomLights(prev => ({
-              ...prev,
-              [data.room]: data.state === 'ON'
-            }));
+          // Handle initial state from server
+          if (data.type === 'initial_state' && data.data) {
+            console.log('🏠 Received initial state:', data.data);
+            const state = data.data;
+            if (state.sensors) {
+              setThermostatData(prev => ({
+                ...prev,
+                currentTemp: state.sensors.temperature || prev.currentTemp,
+                humidity: state.sensors.humidity || prev.humidity,
+                targetTemp: state.devices?.thermostat_target || prev.targetTemp
+              }));
+            }
+            if (state.devices) {
+              setRoomLights({
+                living_room: state.devices.living_room_led === 'ON',
+                bedroom: state.devices.bedroom_led === 'ON',
+                kitchen: state.devices.kitchen_led === 'ON',
+                bathroom: state.devices.bathroom_led === 'ON'
+              });
+            }
           }
           
-          // Update sensor data
+          // Handle MQTT updates with current state
+          if (data.type === 'mqtt_update' && data.current_state) {
+            const state = data.current_state;
+            
+            // Update sensor readings from DHT11
+            if (data.topic === 'home/dht11' && state.sensors) {
+              console.log('🌡️ DHT11 update received:', state.sensors);
+              setThermostatData(prev => ({
+                ...prev,
+                currentTemp: state.sensors.temperature || prev.currentTemp,
+                humidity: state.sensors.humidity || prev.humidity,
+                targetTemp: state.devices?.thermostat_target || prev.targetTemp
+              }));
+            }
+            
+            // Update LED states from status messages
+            if (data.topic.includes('/lights/') && state.devices) {
+              setRoomLights({
+                living_room: state.devices.living_room_led === 'ON',
+                bedroom: state.devices.bedroom_led === 'ON',
+                kitchen: state.devices.kitchen_led === 'ON',
+                bathroom: state.devices.bathroom_led === 'ON'
+              });
+            }
+          }
+          
+          // Legacy support for direct sensor data messages
           if (data.type === 'sensor_data') {
             setThermostatData(prev => ({
               ...prev,
               currentTemp: data.temperature || prev.currentTemp,
               humidity: data.humidity || prev.humidity
+            }));
+          }
+          
+          // Legacy support for light status messages
+          if (data.type === 'light_status') {
+            setRoomLights(prev => ({
+              ...prev,
+              [data.room]: data.state === 'ON'
             }));
           }
         } catch (e) {

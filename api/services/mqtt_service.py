@@ -18,7 +18,11 @@ class MQTTService:
                 "last_update": None
             },
             "devices": {
-                "led": "OFF",  # Arduino LED state
+                # Multi-room LED states (matching Arduino rooms)
+                "living_room_led": "OFF",
+                "bedroom_led": "OFF", 
+                "kitchen_led": "OFF",
+                "bathroom_led": "OFF",
                 "thermostat_target": 22,
                 "last_command": None
             }
@@ -34,8 +38,9 @@ class MQTTService:
             
             # Subscribe to Arduino topics for real-time state sync
             client.subscribe("home/dht11")  # Arduino DHT11 sensor data
-            client.subscribe("home/led/status")  # LED status updates
-            client.subscribe("home/thermostat/status")  # Thermostat status
+            client.subscribe("home/+/lights/status")  # Multi-room LED status updates
+            client.subscribe("home/+/lights/cmd")  # Multi-room LED commands (for echo)
+            client.subscribe("home/room/data")  # Thermostat target data
             client.subscribe("home/+/+")  # All home device topics
             
             print("Subscribed to Arduino smart home topics")
@@ -88,26 +93,41 @@ class MQTTService:
                     print(f"Current state after update: {self.current_state}")
                 else:
                     print(f"[ERROR] Invalid DHT11 format: {message} (no comma found)")
+            
+            elif topic.startswith("home/") and topic.endswith("/lights/status"):
+                # Handle multi-room LED status updates from Arduino
+                room = topic.split("/")[1]  # Extract room name
+                if message in ["ON", "OFF", "OFFLINE"]:
+                    self.current_state["devices"][f"{room}_led"] = message
+                    self.current_state["devices"]["last_command"] = datetime.datetime.now().isoformat()
+                    print(f"[SUCCESS] {room} LED status updated: {message}")
                     
-            elif topic == "home/led/cmd":
-                # Track LED commands we send
+            elif topic.startswith("home/") and topic.endswith("/lights/cmd"):
+                # Track LED commands we send (echo from Arduino)
+                room = topic.split("/")[1]  # Extract room name
                 if message in ["ON", "OFF"]:
-                    self.current_state["devices"]["led"] = message
+                    self.current_state["devices"][f"{room}_led"] = message
                     self.current_state["devices"]["last_command"] = datetime.datetime.now().isoformat()
-                    print(f"LED state updated: {message}")
+                    print(f"[ECHO] {room} LED command confirmed: {message}")
                     
-            elif topic == "home/thermostat/set":
-                # Track thermostat commands
+            elif topic == "home/room/data":
+                # Track thermostat target commands from UI
                 try:
-                    temp = int(message)
-                    self.current_state["devices"]["thermostat_target"] = temp
-                    self.current_state["devices"]["last_command"] = datetime.datetime.now().isoformat()
-                    print(f"Thermostat target updated: {temp}°C")
-                except ValueError:
-                    pass
+                    if ',' in message:
+                        temp_str, humid_str = message.split(',')
+                        temp = float(temp_str.strip())
+                        self.current_state["devices"]["thermostat_target"] = temp
+                        self.current_state["devices"]["last_command"] = datetime.datetime.now().isoformat()
+                        print(f"[SUCCESS] Thermostat target updated: {temp}°C")
+                    else:
+                        temp = float(message.strip())
+                        self.current_state["devices"]["thermostat_target"] = temp
+                        print(f"[SUCCESS] Thermostat target updated: {temp}°C")
+                except ValueError as e:
+                    print(f"[ERROR] Invalid thermostat data: {message} - {e}")
                     
             elif topic.startswith("home/") and topic.endswith("/status"):
-                # Handle device status updates (if Arduino publishes status)
+                # Handle other device status updates (generic fallback)
                 device = topic.split("/")[1]
                 self.current_state["devices"][f"{device}_status"] = message
                 print(f"Device {device} status: {message}")
