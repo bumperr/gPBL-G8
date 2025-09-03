@@ -169,7 +169,30 @@ const SmartHomeControls = ({ elderInfo, onSpeakText }) => {
     };
 
     const ws = connectWebSocket();
-    return () => ws?.close();
+    
+    // Listen for Take Action optimistic updates
+    const handleSmartHomeUpdate = (event) => {
+      const { type, room, state, temperature, humidity } = event.detail;
+      
+      if (type === 'light') {
+        console.log(`🎯 Take Action UI update: ${room} light ${state ? 'ON' : 'OFF'}`);
+        setRoomLights(prev => ({ ...prev, [room]: state }));
+      } else if (type === 'thermostat') {
+        console.log(`🎯 Take Action UI update: Thermostat ${temperature}°C`);
+        setThermostatData(prev => ({ 
+          ...prev, 
+          targetTemp: temperature,
+          ...(humidity && { humidity: humidity })
+        }));
+      }
+    };
+    
+    window.addEventListener('smartHomeUpdate', handleSmartHomeUpdate);
+    
+    return () => {
+      ws?.close();
+      window.removeEventListener('smartHomeUpdate', handleSmartHomeUpdate);
+    };
   }, []);
 
   // Send MQTT command to Arduino

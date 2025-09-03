@@ -426,6 +426,16 @@ const VoiceCommunication = ({
             console.log('Response ok:', response.ok);
             
             if (response.ok) {
+              // Trigger UI update immediately (optimistic update like manual controls)
+              const updateEvent = new CustomEvent('smartHomeUpdate', {
+                detail: {
+                  type: 'light',
+                  room: room,
+                  state: ledState === 'ON'
+                }
+              });
+              window.dispatchEvent(updateEvent);
+              
               const roomName = room.replace('_', ' ');
               console.log('SUCCESS! About to speak success message');
               speakText(`I've ${ledState === 'ON' ? 'turned on' : 'turned off'} the ${roomName} light successfully!`);
@@ -460,6 +470,16 @@ const VoiceCommunication = ({
             });
 
             if (response.ok) {
+              // Trigger UI update immediately (optimistic update like manual controls)
+              const updateEvent = new CustomEvent('smartHomeUpdate', {
+                detail: {
+                  type: 'thermostat',
+                  temperature: temperature,
+                  humidity: humidity
+                }
+              });
+              window.dispatchEvent(updateEvent);
+              
               speakText(`I've set the thermostat to ${temperature} degrees successfully!`);
             } else {
               throw new Error('Failed to control thermostat');

@@ -523,6 +523,16 @@ What would you like to talk about today?`,
             });
 
             if (response.ok) {
+              // Trigger UI update immediately (optimistic update like manual controls)
+              const updateEvent = new CustomEvent('smartHomeUpdate', {
+                detail: {
+                  type: 'light',
+                  room: roomName,
+                  state: ledState === 'ON'
+                }
+              });
+              window.dispatchEvent(updateEvent);
+              
               const roomDisplayName = roomName.replace('_', ' ');
               const lightMessage = {
                 id: Date.now() + Math.random(),
@@ -578,6 +588,16 @@ What would you like to talk about today?`,
             });
 
             if (response.ok) {
+              // Trigger UI update immediately (optimistic update like manual controls)
+              const updateEvent = new CustomEvent('smartHomeUpdate', {
+                detail: {
+                  type: 'thermostat',
+                  temperature: temperature,
+                  humidity: humidity
+                }
+              });
+              window.dispatchEvent(updateEvent);
+              
               const tempMessage = {
                 id: Date.now() + Math.random(),
                 type: 'ai',

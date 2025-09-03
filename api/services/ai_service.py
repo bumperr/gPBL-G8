@@ -435,13 +435,49 @@ Remember you are speaking to an elderly person, so use clear, simple language an
                 
                 print(f"Intent detected from database: {intent_name} (confidence: {confidence:.2f})")
                 
-                # Check for temperature-related intents that need enhanced reasoning
-                if intent_name == 'temperature_monitoring' or 'temperature' in intent_name or any(keyword in message_lower for keyword in ['cold', 'hot', 'warm', 'temperature', 'thermostat']):
-                    enhanced_result = await self._enhanced_temperature_reasoning(message, elder_info)
+                # Check for temperature-related intents using LLM reasoning with timeout
+                try:
+                    is_temperature_related = await asyncio.wait_for(
+                        self._is_temperature_related_request(message), 
+                        timeout=5.0
+                    )
+                except asyncio.TimeoutError:
+                    print("⏱️ Temperature detection timed out, using keyword fallback")
+                    # Fallback to keyword detection if LLM times out
+                    temperature_keywords = ['cold', 'hot', 'warm', 'temperature', 'thermostat', 'chilly', 'freezing', 'heating', 'cooling']
+                    is_temperature_related = any(keyword in message.lower() for keyword in temperature_keywords)
+                except Exception as e:
+                    print(f"❌ Temperature detection failed: {e}, using keyword fallback")
+                    # Fallback to keyword detection if LLM fails
+                    temperature_keywords = ['cold', 'hot', 'warm', 'temperature', 'thermostat', 'chilly', 'freezing', 'heating', 'cooling']
+                    is_temperature_related = any(keyword in message.lower() for keyword in temperature_keywords)
+                
+                print(f"Intent: {intent_name}, LLM detected temperature-related: {is_temperature_related}")  # Debug
+                
+                if intent_name == 'temperature_monitoring' or 'temperature' in intent_name or is_temperature_related:
+                    print(f"🌡️ Attempting enhanced temperature reasoning...")  # Debug
+                    try:
+                        # Add timeout to prevent hanging
+                        enhanced_result = await asyncio.wait_for(
+                            self._enhanced_temperature_reasoning(message, elder_info), 
+                            timeout=10.0
+                        )
+                        
+                        print(f"Enhanced result success: {enhanced_result.get('success')}")  # Debug
+                        
+                        # Use enhanced reasoning result if successful
+                        if enhanced_result.get('success'):
+                            return enhanced_result
+                        else:
+                            print(f"⚠️ Enhanced reasoning unsuccessful, falling back to database action...")  # Debug
+                    except asyncio.TimeoutError:
+                        print(f"⏱️ Enhanced temperature reasoning timed out, using database fallback")  # Debug
+                    except Exception as e:
+                        print(f"❌ Enhanced temperature reasoning failed: {str(e)}, using database fallback")  # Debug
                     
-                    # Use enhanced reasoning result if successful
-                    if enhanced_result.get('success'):
-                        return enhanced_result
+                    # Continue with database action as fallback
+                else:
+                    print(f"❌ No temperature reasoning triggered for: {intent_name}")  # Debug
                 
                 # Get the best action for this intent based on message content
                 best_action = self.intent_db.select_best_action(intent_name, message)
@@ -467,6 +503,43 @@ Remember you are speaking to an elderly person, so use clear, simple language an
                     }
             else:
                 # If no database intent detected, check other patterns
+                
+                # Still check for temperature requests using LLM reasoning with timeout
+                try:
+                    is_temperature_related = await asyncio.wait_for(
+                        self._is_temperature_related_request(message), 
+                        timeout=5.0
+                    )
+                except (asyncio.TimeoutError, Exception):
+                    print("⏱️ Temperature detection timed out (no intent), using keyword fallback")
+                    # Fallback to keyword detection if LLM times out or fails
+                    temperature_keywords = ['cold', 'hot', 'warm', 'temperature', 'thermostat', 'chilly', 'freezing', 'heating', 'cooling']
+                    is_temperature_related = any(keyword in message.lower() for keyword in temperature_keywords)
+                
+                print(f"No database intent, but LLM detected temperature-related: {is_temperature_related}")  # Debug
+                
+                if is_temperature_related:
+                    print(f"🌡️ Attempting enhanced temperature reasoning (no intent)...")  # Debug
+                    try:
+                        # Add timeout to prevent hanging
+                        enhanced_result = await asyncio.wait_for(
+                            self._enhanced_temperature_reasoning(message, elder_info), 
+                            timeout=10.0
+                        )
+                        
+                        print(f"Enhanced result success: {enhanced_result.get('success')}")  # Debug
+                        
+                        # Use enhanced reasoning result if successful
+                        if enhanced_result.get('success'):
+                            print(f"✅ Returning enhanced temperature result")  # Debug
+                            return enhanced_result
+                        else:
+                            print(f"⚠️ Enhanced reasoning unsuccessful, continuing with device matching...")  # Debug
+                    except asyncio.TimeoutError:
+                        print(f"⏱️ Enhanced temperature reasoning timed out (no intent), continuing with device matching")  # Debug
+                    except Exception as e:
+                        print(f"❌ Enhanced temperature reasoning failed: {str(e)}, continuing with device matching")  # Debug
+                
                 # Find matching devices from database
                 matched_devices = self.device_service.find_device_by_keyword(message)
                 
@@ -867,11 +940,39 @@ Remember you are speaking to an elderly person, so use clear, simple language an
                 "error": str(e)
             }
     
-    async def _enhanced_temperature_reasoning(self, message: str, elder_info: Dict = None) -> Dict[str, Any]:
-        """Enhanced temperature reasoning with sensor reading and AI thinking"""
+    async def _is_temperature_related_request(self, message: str) -> bool:
+        """Use LLM to determine if a message is temperature-related instead of keyword matching"""
         try:
+            temperature_detection_prompt = f"""
+            Analyze if this message is related to temperature, heating, cooling, or thermal comfort:
             
-            # Step 1: Automatically read current conditions (auto-callable functions)
+            Message: "{message}"
+            
+            Consider these as temperature-related:
+            - Feeling too hot, cold, warm, chilly, freezing
+            - Wanting to adjust temperature, heating, cooling
+            - Mentions of thermostat, AC, heater
+            - Comfort requests related to room temperature
+            - Weather comfort complaints
+            
+            Respond with only "true" or "false".
+            """
+            
+            response = await self.chat_completion(temperature_detection_prompt)
+            result = response.get("response", "false").lower().strip()
+            
+            return result == "true"
+            
+        except Exception as e:
+            print(f"Temperature detection error: {e}")
+            # Fallback to basic keyword check if LLM fails
+            temperature_keywords = ['cold', 'hot', 'warm', 'temperature', 'thermostat', 'chilly', 'freezing', 'heating', 'cooling']
+            return any(keyword in message.lower() for keyword in temperature_keywords)
+
+    async def _enhanced_temperature_reasoning(self, message: str, elder_info: Dict = None) -> Dict[str, Any]:
+        """Simple temperature reasoning based on current reading and request sentiment"""
+        try:
+            # Step 1: Read current conditions  
             current_temp_data = await self._read_temperature_sensor()
             thermostat_data = await self._read_thermostat_status()
             
@@ -879,48 +980,48 @@ Remember you are speaking to an elderly person, so use clear, simple language an
             current_humidity = current_temp_data.get("humidity", 50)
             thermostat_setting = thermostat_data.get("current_setting", 22)
             
-            # Step 2: AI reasoning for optimal temperature
-            reasoning_prompt = f"""
-            You are an expert HVAC system helping an elderly person who said: "{message}"
+            # Step 2: Simple sentiment-based logic (no complex LLM calls)
+            message_lower = message.lower()
             
-            Current conditions:
-            - Room temperature: {current_temp}°C
-            - Humidity: {current_humidity}%
-            - Current thermostat setting: {thermostat_setting}°C
+            # Cold requests - increase temperature  
+            cold_keywords = ['cold', 'freezing', 'chilly', 'shivering', 'add more celsius', 'increase temperature', 'warmer', 'turn up heat']
+            # Hot requests - decrease temperature
+            hot_keywords = ['hot', 'warm', 'sweating', 'stuffy', 'burning up', 'cooler', 'reduce temperature', 'turn down', 'too warm']
             
-            The elder is expressing thermal discomfort. Based on:
-            1. Their comfort complaint
-            2. Current environmental conditions
-            3. Elderly people's thermal comfort needs (typically 20-24°C)
-            4. Energy efficiency considerations
-            5. Safety (avoid extreme temperatures)
+            if any(keyword in message_lower for keyword in cold_keywords):
+                # They want it warmer
+                if 'room temperature' in message_lower:
+                    recommended_temp = 22.0  # Standard comfortable room temperature
+                    reasoning = "Setting to comfortable room temperature (22°C)"
+                else:
+                    # Increase by 2-3 degrees from current, but at least 1 degree above thermostat
+                    recommended_temp = max(current_temp + 2.5, thermostat_setting + 1.5)
+                    reasoning = f"Increasing temperature from {current_temp}°C for warmth"
+                    
+            elif any(keyword in message_lower for keyword in hot_keywords):
+                # They want it cooler
+                if 'room temperature' in message_lower:
+                    recommended_temp = 21.0  # Standard comfortable room temperature  
+                    reasoning = "Setting to comfortable room temperature (21°C)"
+                else:
+                    # Decrease by 2-3 degrees from current, but at least 1 degree below thermostat
+                    recommended_temp = min(current_temp - 2.5, thermostat_setting - 1.5)
+                    reasoning = f"Decreasing temperature from {current_temp}°C for cooling"
+                    
+            else:
+                # Default: moderate increase for general comfort
+                recommended_temp = current_temp + 1.5
+                reasoning = "Moderate temperature adjustment for comfort"
             
-            What is the optimal temperature to set the thermostat to?
+            # Safety bounds
+            recommended_temp = max(18.0, min(26.0, recommended_temp))
             
-            Respond with JSON:
-            {{
-                "recommended_temperature": 23.5,
-                "reasoning": "Detailed explanation of why this temperature is optimal",
-                "comfort_improvement": "How this will address their concern",
-                "safety_notes": "Any safety considerations"
-            }}
-            """
-            
-            # Get AI reasoning
-            reasoning_response = await self.chat_completion(reasoning_prompt)
-            
-            try:
-                reasoning_data = json.loads(reasoning_response.get("response", "{}"))
-            except json.JSONDecodeError:
-                # Fallback reasoning
-                reasoning_data = {
-                    "recommended_temperature": current_temp + 2 if "cold" in message.lower() else current_temp - 1,
-                    "reasoning": "Basic temperature adjustment based on user feedback",
-                    "comfort_improvement": "This should improve your comfort level",
-                    "safety_notes": "Temperature adjusted within safe range"
-                }
-            
-            recommended_temp = reasoning_data.get("recommended_temperature", 22.0)
+            reasoning_data = {
+                "recommended_temperature": round(recommended_temp, 1),
+                "reasoning": reasoning,
+                "comfort_improvement": "This should improve your comfort level",
+                "safety_notes": "Temperature adjusted within safe range"
+            }
             
             # Step 3: Generate response and suggested action
             # Check if this is a "house is cold" situation (whole house vs single room)
