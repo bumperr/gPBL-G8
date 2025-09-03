@@ -89,8 +89,6 @@ class MQTTService:
                     self.current_state["sensors"]["humidity"] = humidity
                     self.current_state["sensors"]["last_update"] = datetime.datetime.now().isoformat()
                     
-                    print(f"[SUCCESS] Updated sensors: {temperature}°C, {humidity}%")
-                    print(f"Current state after update: {self.current_state}")
                 else:
                     print(f"[ERROR] Invalid DHT11 format: {message} (no comma found)")
             

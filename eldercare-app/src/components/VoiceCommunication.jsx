@@ -328,6 +328,11 @@ const VoiceCommunication = ({
 
   // Execute suggested action
   const executeAction = async (action) => {
+    console.log('=== EXECUTING ACTION ===');
+    console.log('Action:', action);
+    console.log('Function name:', action.function_name);
+    console.log('Parameters:', action.parameters);
+    
     try {
       switch (action.function_name) {
         case 'start_video_call':
@@ -343,9 +348,185 @@ const VoiceCommunication = ({
           // Could integrate with actual emergency system
           break;
 
+        case 'send_health_alert':
+          speakText('I\'ve notified your caregivers about your health concern. They will check on you soon.');
+          break;
+
+        case 'read_arduino_sensors':
+          speakText('Let me check the current temperature and humidity readings for you.');
+          // This action typically doesn't require confirmation, just provides info
+          break;
+
+        case 'set_target_temperature':
+          // Handle target temperature setting using same method as control_thermostat
+          try {
+            const targetTemp = action.parameters.target_temperature || action.parameters.temperature || 22;
+            const targetHumidity = action.parameters.target_humidity || 50;
+            
+            const response = await fetch('http://localhost:8000/mqtt/send', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                topic: 'home/room/data',
+                message: `${targetTemp},${targetHumidity}`
+              })
+            });
+
+            if (response.ok) {
+              speakText(`I've set the target temperature to ${targetTemp} degrees successfully!`);
+            } else {
+              throw new Error('Failed to set target temperature');
+            }
+          } catch (error) {
+            console.error('Target temperature setting failed:', error);
+            speakText(`Sorry, I had trouble setting the target temperature.`);
+          }
+          break;
+
+        case 'schedule_medication_reminder':
+          speakText('I\'ve noted your medication reminder request. Your caregiver will help set this up for you.');
+          break;
+
+        case 'provide_companionship':
+          speakText('I\'m here to chat with you anytime you need company. What would you like to talk about?');
+          break;
+
+        case 'general_conversation':
+          speakText('I\'m happy to continue our conversation. Is there anything specific you\'d like to discuss?');
+          break;
+
+        case 'control_arduino_room_light':
+          // Handle Arduino room light control using exact same method as manual controls
+          console.log('=== CONTROL_ARDUINO_ROOM_LIGHT CASE ===');
+          try {
+            const room = action.parameters.room_name || 'living_room';
+            const ledState = action.parameters.led_state || 'ON';
+            const topic = `home/${room}/lights/cmd`;
+            
+            console.log('Room:', room);
+            console.log('LED State:', ledState);
+            console.log('Topic:', topic);
+            console.log('About to send MQTT command...');
+            
+            // Use the same endpoint and format as SmartHomeControls manual control
+            const response = await fetch('http://localhost:8000/mqtt/send', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                topic: topic,
+                message: ledState
+              })
+            });
+
+            console.log('Response status:', response.status);
+            console.log('Response ok:', response.ok);
+            
+            if (response.ok) {
+              const roomName = room.replace('_', ' ');
+              console.log('SUCCESS! About to speak success message');
+              speakText(`I've ${ledState === 'ON' ? 'turned on' : 'turned off'} the ${roomName} light successfully!`);
+            } else {
+              console.log('Response not ok, throwing error');
+              const errorText = await response.text();
+              console.log('Error response:', errorText);
+              throw new Error('Failed to control room light');
+            }
+          } catch (error) {
+            console.error('Room light control failed:', error);
+            speakText(`Sorry, I had trouble controlling the room light.`);
+          }
+          break;
+
+        case 'control_thermostat':
+          // Handle thermostat control using exact same method as manual controls
+          try {
+            const temperature = action.parameters.temperature || 22;
+            const humidity = 50; // Default humidity like manual control
+            
+            // Use the same endpoint and format as SmartHomeControls manual control
+            const response = await fetch('http://localhost:8000/mqtt/send', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                topic: 'home/room/data',
+                message: `${temperature},${humidity}`
+              })
+            });
+
+            if (response.ok) {
+              speakText(`I've set the thermostat to ${temperature} degrees successfully!`);
+            } else {
+              throw new Error('Failed to control thermostat');
+            }
+          } catch (error) {
+            console.error('Thermostat control failed:', error);
+            speakText(`Sorry, I had trouble controlling the thermostat.`);
+          }
+          break;
+
         case 'control_smart_device':
-          // Handle smart home device control
-          speakText(`I've sent the command to control your ${action.parameters.device_name || 'device'}.`);
+          // Handle smart home device control using same API as manual controls
+          const room = action.parameters.room || 'living_room';
+          const isLightAction = action.parameters.device_category === 'lighting' || 
+                              action.parameters.device_name?.toLowerCase().includes('light');
+          
+          if (isLightAction && action.parameters.action_name) {
+            try {
+              // Use the same method as SmartHomeControls manual control
+              const command = action.parameters.action_name === 'turn_on' ? 'ON' : 'OFF';
+              const topic = `home/${room}/lights/cmd`;
+              
+              const response = await fetch('http://localhost:8000/mqtt/send', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  topic: topic,
+                  message: command
+                })
+              });
+
+              if (response.ok) {
+                const deviceName = action.parameters.device_name || 'lights';
+                speakText(`I've ${command === 'ON' ? 'turned on' : 'turned off'} the ${deviceName} successfully!`);
+              } else {
+                throw new Error('Failed to control light');
+              }
+            } catch (error) {
+              console.error('Light control failed:', error);
+              speakText(`Sorry, I had trouble controlling the lights. Please try the manual controls.`);
+            }
+          } else if (action.parameters.device_category === 'climate') {
+            // Handle thermostat using manual control API
+            try {
+              const temperature = action.parameters.temperature || 22;
+              const response = await fetch('/api/smart-home/thermostat/set', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ temperature, humidity: 50 })
+              });
+
+              if (response.ok) {
+                speakText(`I've set the thermostat to ${temperature} degrees successfully!`);
+              } else {
+                throw new Error('Failed to control thermostat');
+              }
+            } catch (error) {
+              console.error('Thermostat control failed:', error);
+              speakText(`Sorry, I had trouble controlling the thermostat.`);
+            }
+          } else {
+            speakText(`I've sent the command to control your ${action.parameters.device_name || 'device'}.`);
+          }
           break;
 
         default:

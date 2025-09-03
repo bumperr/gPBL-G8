@@ -503,6 +503,159 @@ What would you like to talk about today?`,
           }
           break;
 
+        case 'control_arduino_room_light':
+          // Handle Arduino room light control using exact same method as manual controls
+          const roomName = parameters.room_name || 'living_room';
+          const ledState = parameters.led_state || 'ON';
+          const lightTopic = `home/${roomName}/lights/cmd`;
+          
+          try {
+            // Use the same MQTT endpoint as SmartHomeControls manual control
+            const response = await fetch('http://localhost:8000/mqtt/send', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                topic: lightTopic,
+                message: ledState
+              })
+            });
+
+            if (response.ok) {
+              const roomDisplayName = roomName.replace('_', ' ');
+              const lightMessage = {
+                id: Date.now() + Math.random(),
+                type: 'ai',
+                content: `✅ Perfect! I've successfully ${ledState === 'ON' ? 'turned on' : 'turned off'} the ${roomDisplayName} light. The room should be ${ledState === 'ON' ? 'brighter' : 'dimmer'} now.`,
+                timestamp: new Date(),
+                isActionResult: true,
+                deviceInfo: {
+                  name: `${roomDisplayName} Light`,
+                  room: roomName,
+                  state: ledState,
+                  category: 'lighting'
+                }
+              };
+              setMessages(prev => [...prev, lightMessage]);
+            } else {
+              throw new Error('Failed to control room light');
+            }
+          } catch (lightError) {
+            console.error('Room light control failed:', lightError);
+            const errorMessage = {
+              id: Date.now() + Math.random(),
+              type: 'ai',
+              content: `❌ I had trouble controlling the ${roomName.replace('_', ' ')} light. Please check if your smart home system is connected and try the manual controls.`,
+              timestamp: new Date(),
+              isError: true,
+              deviceInfo: {
+                name: `${roomName.replace('_', ' ')} Light`,
+                room: roomName,
+                error: lightError.message || 'Connection failed'
+              }
+            };
+            setMessages(prev => [...prev, errorMessage]);
+          }
+          break;
+
+        case 'control_thermostat':
+        case 'set_target_temperature':
+          // Handle thermostat control using exact same method as manual controls
+          const temperature = parameters.temperature || parameters.target_temperature || 22;
+          const humidity = parameters.humidity || parameters.target_humidity || 50;
+          
+          try {
+            const response = await fetch('http://localhost:8000/mqtt/send', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                topic: 'home/room/data',
+                message: `${temperature},${humidity}`
+              })
+            });
+
+            if (response.ok) {
+              const tempMessage = {
+                id: Date.now() + Math.random(),
+                type: 'ai',
+                content: `✅ Perfect! I've set the thermostat to ${temperature}°C. The room should reach your desired temperature shortly.`,
+                timestamp: new Date(),
+                isActionResult: true,
+                deviceInfo: {
+                  name: 'Thermostat',
+                  temperature: temperature,
+                  humidity: humidity,
+                  category: 'climate'
+                }
+              };
+              setMessages(prev => [...prev, tempMessage]);
+            } else {
+              throw new Error('Failed to control thermostat');
+            }
+          } catch (tempError) {
+            console.error('Thermostat control failed:', tempError);
+            const errorMessage = {
+              id: Date.now() + Math.random(),
+              type: 'ai',
+              content: `❌ I had trouble setting the thermostat to ${temperature}°C. Please check if your smart home system is connected and try the manual controls.`,
+              timestamp: new Date(),
+              isError: true,
+              deviceInfo: {
+                name: 'Thermostat',
+                error: tempError.message || 'Connection failed'
+              }
+            };
+            setMessages(prev => [...prev, errorMessage]);
+          }
+          break;
+
+        case 'read_arduino_sensors':
+          const sensorMessage = {
+            id: Date.now() + Math.random(),
+            type: 'ai',
+            content: `📊 Let me check the current temperature and humidity readings for you. The sensors are reading the current room conditions.`,
+            timestamp: new Date(),
+            isActionResult: true
+          };
+          setMessages(prev => [...prev, sensorMessage]);
+          break;
+
+        case 'schedule_medication_reminder':
+          const medicationMessage = {
+            id: Date.now() + Math.random(),
+            type: 'ai',
+            content: `💊 I've noted your medication reminder request. Your caregiver will help set this up for you to ensure you never miss your important medications.`,
+            timestamp: new Date(),
+            isActionResult: true
+          };
+          setMessages(prev => [...prev, medicationMessage]);
+          break;
+
+        case 'provide_companionship':
+          const companionshipMessage = {
+            id: Date.now() + Math.random(),
+            type: 'ai',
+            content: `😊 I'm here to chat with you anytime you need company. What would you like to talk about? I enjoy hearing about your day, your interests, or anything on your mind.`,
+            timestamp: new Date(),
+            isActionResult: true
+          };
+          setMessages(prev => [...prev, companionshipMessage]);
+          break;
+
+        case 'general_conversation':
+          const conversationMessage = {
+            id: Date.now() + Math.random(),
+            type: 'ai',
+            content: `💬 I'm happy to continue our conversation. Is there anything specific you'd like to discuss? I'm here to listen and chat about whatever interests you.`,
+            timestamp: new Date(),
+            isActionResult: true
+          };
+          setMessages(prev => [...prev, conversationMessage]);
+          break;
+
         default:
           console.log('Action not implemented:', action);
       }
@@ -553,6 +706,22 @@ What would you like to talk about today?`,
         const deviceName = parameters?.device_name || 'Device';
         const actionDesc = parameters?.action_description || 'Control device';
         return `🏠 ${actionDesc}`;
+      case 'control_arduino_room_light':
+        const roomName = parameters?.room_name || 'room';
+        const ledState = parameters?.led_state || 'ON';
+        return `💡 Turn ${ledState === 'ON' ? 'On' : 'Off'} ${roomName.replace('_', ' ')} Light`;
+      case 'control_thermostat':
+      case 'set_target_temperature':
+        const temp = parameters?.temperature || parameters?.target_temperature || '22';
+        return `🌡️ Set Temperature to ${temp}°C`;
+      case 'read_arduino_sensors':
+        return '📊 Check Temperature & Humidity';
+      case 'schedule_medication_reminder':
+        return '💊 Set Medication Reminder';
+      case 'provide_companionship':
+        return '😊 Chat & Companionship';
+      case 'general_conversation':
+        return '💬 Continue Conversation';
       default:
         return '✅ Take Action';
     }

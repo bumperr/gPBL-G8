@@ -89,55 +89,64 @@ EMERGENCY RESPONSE: If you detect any emergency situation, immediately suggest c
 Remember: Your role is to enhance quality of life, provide companionship, and ensure safety for elderly individuals."""
 
     def _get_smart_home_system_prompt(self) -> str:
-        """System prompt for smart home control based on Arduino capabilities"""
-        return """You are a smart home control assistant specialized in eldercare. Your job is to translate natural language requests into specific smart home commands and execute them safely.
+        """System prompt for smart home control based on database-driven device management"""
+        # Get current devices from database for dynamic prompt
+        try:
+            all_devices = self.device_service.get_all_devices()
+            device_summary = self.device_service.get_device_summary()
+            
+            devices_by_category = {}
+            for device in all_devices:
+                category = device['category']
+                if category not in devices_by_category:
+                    devices_by_category[category] = []
+                devices_by_category[category].append(device)
+            
+            device_list = ""
+            for category, devices in devices_by_category.items():
+                device_list += f"\n{category.upper()} DEVICES:\n"
+                for device in devices:
+                    device_list += f"   - {device['name']} ({device['room']}) - {device['description']}\n"
+            
+        except Exception as e:
+            print(f"Error getting devices for prompt: {e}")
+            device_list = "\n   - System devices will be loaded dynamically from database\n"
+        
+        return f"""You are a smart home control assistant specialized in eldercare. Your job is to translate natural language requests into specific smart home commands using our database-driven device management system.
 
-AVAILABLE SMART HOME DEVICES (from Arduino system):
-1. LIGHTS:
-   - Living room light (LED_LIVING_ROOM, pin 2)
-   - Bedroom light (LED_BEDROOM, pin 3) 
-   - Kitchen light (LED_KITCHEN, pin 4)
-   - Actions: turn_on, turn_off, set_brightness (0-100%)
+AVAILABLE SMART HOME DEVICES:{device_list}
 
-2. THERMOSTAT:
-   - Heating system control (RELAY_THERMOSTAT, pin 5)
-   - Actions: set_temperature, turn_on, turn_off
-   - Current temperature monitoring via DHT11 sensor
+DEVICE CAPABILITIES:
+- All devices are managed through a centralized database
+- Each device has specific actions (turn_on, turn_off, set_temperature, etc.)
+- Device control uses standardized MQTT topics compatible with Arduino
+- The system automatically finds the best matching device and action for user requests
 
-3. DOOR LOCK:
-   - Electronic door lock (SERVO_DOOR_LOCK, pin 9)
-   - Actions: lock, unlock
-   - Security consideration: confirm identity before unlocking
-
-4. SECURITY SYSTEM:
-   - Motion sensor (SENSOR_MOTION, pin 7)
-   - Emergency buzzer (BUZZER_EMERGENCY, pin 6)
-   - Actions: arm, disarm, trigger_alarm
-
-5. TEMPERATURE MONITORING:
-   - DHT11 sensor provides real-time temperature and humidity
-   - Automatic reporting every 10 seconds to MQTT topic: eldercare/sensors/temperature
-
-MQTT TOPICS STRUCTURE:
-- Commands: eldercare/commands/{device_type}/{elder_name}
-- Responses: eldercare/responses/{device_type}/{elder_name}
-- Sensors: eldercare/sensors/{sensor_type}
-- Emergency: eldercare/emergency/{alert_type}
+MQTT TOPICS STRUCTURE (Arduino Compatible):
+- Light Commands: home/{{room}}/lights/cmd (payload: ON/OFF)
+- Temperature: home/room/data (payload: temperature,humidity)
+- Other Devices: home/{{room}}/{{device}}/cmd
 
 SAFETY PROTOCOLS:
-1. Always confirm before unlocking doors
-2. Check temperature requests for safety (65-80°F recommended)
+1. Always confirm before unlocking doors or security changes
+2. Check temperature requests for safety (18-30°C recommended)
 3. Verify emergency commands with elder
 4. Log all commands for caregiver review
-5. Limit automation to safe, beneficial actions
+5. Use database to ensure only valid devices and actions
 
 RESPONSE FORMAT: When controlling devices, provide:
 1. Friendly confirmation of what you're doing
-2. MQTT command details for execution
+2. Specify which device will be controlled
 3. Safety considerations if any
 4. Alternative suggestions when appropriate
 
-Example: "I'm turning on the living room light for you. The light should come on now. Is there anything else you'd like me to adjust?"
+Example: "I'm turning on the Living Room Lights for you using our smart lighting system. The lights should come on now. Is there anything else you'd like me to adjust?"
+
+The system will automatically:
+- Find the best matching device based on your keywords
+- Select the appropriate action for that device
+- Generate the correct MQTT commands
+- Ensure Arduino compatibility
 
 Always prioritize elder safety, comfort, and independence."""
 
@@ -426,6 +435,14 @@ Remember you are speaking to an elderly person, so use clear, simple language an
                 
                 print(f"Intent detected from database: {intent_name} (confidence: {confidence:.2f})")
                 
+                # Check for temperature-related intents that need enhanced reasoning
+                if intent_name == 'temperature_monitoring' or 'temperature' in intent_name or any(keyword in message_lower for keyword in ['cold', 'hot', 'warm', 'temperature', 'thermostat']):
+                    enhanced_result = await self._enhanced_temperature_reasoning(message, elder_info)
+                    
+                    # Use enhanced reasoning result if successful
+                    if enhanced_result.get('success'):
+                        return enhanced_result
+                
                 # Get the best action for this intent based on message content
                 best_action = self.intent_db.select_best_action(intent_name, message)
                 
@@ -597,101 +614,69 @@ Remember you are speaking to an elderly person, so use clear, simple language an
             return [self.default_model]
     
     async def _extract_smart_home_commands(self, user_message: str, ai_response: str, elder_info: Dict = None) -> List[Dict]:
-        """Extract smart home commands from user message and AI response"""
+        """Extract smart home commands using database-driven device detection"""
         commands = []
-        elder_name = elder_info.get('name', 'elder') if elder_info else 'elder'
+        user_message_lower = user_message.lower()
         
-        # Light control patterns
-        light_patterns = {
-            'turn on': 'turn_on',
-            'turn off': 'turn_off',
-            'dim': 'turn_on',
-            'brighten': 'turn_on',
-            'switch on': 'turn_on',
-            'switch off': 'turn_off'
-        }
+        # Find matching devices from database
+        matched_devices = self.device_service.find_device_by_keyword(user_message)
         
-        room_patterns = {
-            'living room': 'living_room',
-            'bedroom': 'bedroom', 
-            'kitchen': 'kitchen',
-            'all': 'all'
-        }
+        if not matched_devices:
+            return commands
         
-        # Check for light commands
-        for phrase, action in light_patterns.items():
-            if phrase in user_message.lower():
-                room = 'living_room'  # default
-                for room_phrase, room_code in room_patterns.items():
-                    if room_phrase in user_message.lower():
-                        room = room_code
-                        break
+        # Process each matched device
+        for device in matched_devices:
+            device_id = device['id']
+            
+            # Find the best matching action for this device based on the message
+            best_action = self.device_service.find_best_action(device_id, user_message)
+            
+            if best_action:
+                # Get MQTT command info from database
+                mqtt_info = self.device_service.get_mqtt_command(device_id, best_action['action_name'])
                 
-                if room == 'all':
-                    # Turn on/off all lights
-                    for r in ['living_room', 'bedroom', 'kitchen']:
+                if mqtt_info:
+                    topic, payload = mqtt_info
+                    
+                    # Handle special cases for Arduino compatibility
+                    if 'lights' in topic:
+                        # Ensure Arduino-compatible topics and payloads
+                        if not topic.endswith('/cmd'):
+                            topic = topic + '/cmd'
+                        
+                        # Convert action to Arduino format
+                        if best_action['action_name'] == 'turn_on':
+                            payload = 'ON'
+                        elif best_action['action_name'] == 'turn_off':
+                            payload = 'OFF'
+                    
+                    # Handle temperature commands
+                    elif 'thermostat' in topic or device['category'] == 'climate':
+                        # Extract temperature from message if present
+                        import re
+                        temp_match = re.search(r'(\d+)\s*(?:degrees?|°)', user_message_lower)
+                        if temp_match:
+                            temp_value = int(temp_match.group(1))
+                            if 'thermostat' in topic:
+                                topic = 'home/room/data'  # Arduino thermostat topic
+                                payload = f'{temp_value}.0,50.0'
+                            else:
+                                payload = str(temp_value)
+                    
+                    # Handle "all lights" command
+                    if 'all' in user_message_lower and 'light' in user_message_lower:
+                        for room in ['living_room', 'bedroom', 'kitchen', 'bathroom']:
+                            commands.append({
+                                'topic': f'home/{room}/lights/cmd',
+                                'payload': payload
+                            })
+                    else:
                         commands.append({
-                            'topic': f'eldercare/commands/lights/{elder_name}',
-                            'payload': {
-                                'elder_name': elder_name,
-                                'device_type': 'lights',
-                                'action': action,
-                                'room': r,
-                                'timestamp': None
-                            }
+                            'topic': topic,
+                            'payload': payload
                         })
-                else:
-                    commands.append({
-                        'topic': f'eldercare/commands/lights/{elder_name}',
-                        'payload': {
-                            'elder_name': elder_name,
-                            'device_type': 'lights',
-                            'action': action,
-                            'room': room,
-                            'timestamp': None
-                        }
-                    })
-                break
-        
-        # Check for thermostat commands
-        temp_patterns = ['temperature', 'heat', 'warm', 'cold', 'thermostat']
-        if any(pattern in user_message.lower() for pattern in temp_patterns):
-            # Extract temperature if mentioned
-            import re
-            temp_match = re.search(r'(\d+)\s*(?:degrees?|°)', user_message.lower())
-            if temp_match:
-                temp_value = int(temp_match.group(1))
-                commands.append({
-                    'topic': f'eldercare/commands/thermostat/{elder_name}',
-                    'payload': {
-                        'elder_name': elder_name,
-                        'device_type': 'thermostat',
-                        'action': 'set_temperature',
-                        'parameters': {'temperature': temp_value},
-                        'timestamp': None
-                    }
-                })
-        
-        # Check for door lock commands
-        lock_patterns = {
-            'lock door': 'lock',
-            'unlock door': 'unlock',
-            'lock the door': 'lock',
-            'unlock the door': 'unlock'
-        }
-        
-        for phrase, action in lock_patterns.items():
-            if phrase in user_message.lower():
-                commands.append({
-                    'topic': f'eldercare/commands/locks/{elder_name}',
-                    'payload': {
-                        'elder_name': elder_name,
-                        'device_type': 'locks',
-                        'action': action,
-                        'timestamp': None
-                    }
-                })
-                break
+                    
+                    break  # Use first matching device/action
         
         return commands
     
@@ -757,7 +742,7 @@ Remember you are speaking to an elderly person, so use clear, simple language an
             }
     
     async def _control_thermostat(self, temperature: float) -> Dict[str, Any]:
-        """Set thermostat to specific temperature"""
+        """Set thermostat to specific temperature using database-driven approach"""
         try:
             if not 18 <= temperature <= 30:
                 return {
@@ -765,16 +750,48 @@ Remember you are speaking to an elderly person, so use clear, simple language an
                     "error": "Temperature must be between 18-30°C for safety"
                 }
             
-            # Send MQTT command to thermostat
-            topic = "home/thermostat/cmd"
-            payload = f"SET_TEMP:{temperature}"
+            # Find thermostat device in database
+            thermostat_devices = self.device_service.get_devices_by_category('climate')
+            thermostat = None
+            
+            for device in thermostat_devices:
+                if 'thermostat' in device['name'].lower():
+                    thermostat = device
+                    break
+            
+            if not thermostat:
+                return {
+                    "success": False,
+                    "error": "No thermostat device found in database"
+                }
+            
+            # Get set temperature action
+            actions = self.device_service.get_device_actions(thermostat['id'])
+            temp_action = None
+            
+            for action in actions:
+                if action['action_name'] == 'set_temperature':
+                    temp_action = action
+                    break
+            
+            if not temp_action:
+                return {
+                    "success": False,
+                    "error": "No temperature control action found"
+                }
+            
+            # Use Arduino-compatible MQTT topic and payload format
+            topic = "home/room/data"  # Arduino thermostat topic
+            payload = f"{temperature},50.0"  # Arduino format: temp,humidity
             
             await self.mqtt_service.publish_message(topic, payload)
             
             return {
                 "success": True,
                 "temperature": temperature,
-                "message": f"Thermostat set to {temperature}°C"
+                "message": f"Thermostat set to {temperature}°C via {thermostat['name']}",
+                "device_used": thermostat['name'],
+                "mqtt_topic": topic
             }
         except Exception as e:
             return {
@@ -782,8 +799,8 @@ Remember you are speaking to an elderly person, so use clear, simple language an
                 "error": str(e)
             }
     
-    async def _control_led(self, action: str) -> Dict[str, Any]:
-        """Turn LED light on or off"""
+    async def _control_led(self, action: str, room: str = "living_room") -> Dict[str, Any]:
+        """Turn LED light on or off using database-driven approach"""
         try:
             if action.upper() not in ["ON", "OFF"]:
                 return {
@@ -791,15 +808,58 @@ Remember you are speaking to an elderly person, so use clear, simple language an
                     "error": "Action must be ON or OFF"
                 }
             
-            topic = "home/led/cmd"
-            payload = action.upper()
+            # Find lighting devices in database
+            lighting_devices = self.device_service.get_devices_by_category('lighting')
+            
+            # Find device for specified room
+            target_device = None
+            for device in lighting_devices:
+                if device['room'] == room or room.replace('_', ' ').lower() in device['name'].lower():
+                    target_device = device
+                    break
+            
+            if not target_device:
+                # Default to first available lighting device
+                target_device = lighting_devices[0] if lighting_devices else None
+            
+            if not target_device:
+                return {
+                    "success": False,
+                    "error": "No lighting devices found in database"
+                }
+            
+            # Get the appropriate action
+            actions = self.device_service.get_device_actions(target_device['id'])
+            light_action = None
+            
+            action_name = 'turn_on' if action.upper() == 'ON' else 'turn_off'
+            for act in actions:
+                if act['action_name'] == action_name:
+                    light_action = act
+                    break
+            
+            if not light_action:
+                return {
+                    "success": False,
+                    "error": f"No {action_name} action found for {target_device['name']}"
+                }
+            
+            # Use Arduino-compatible MQTT topic format
+            topic = target_device['mqtt_topic']
+            if not topic.endswith('/cmd'):
+                topic = topic + '/cmd'
+            
+            payload = action.upper()  # Arduino expects ON/OFF
             
             await self.mqtt_service.publish_message(topic, payload)
             
             return {
                 "success": True,
                 "action": action.upper(),
-                "message": f"LED light turned {action.lower()}"
+                "message": f"{target_device['name']} turned {action.lower()}",
+                "device_used": target_device['name'],
+                "room": target_device['room'],
+                "mqtt_topic": topic
             }
         except Exception as e:
             return {
@@ -810,7 +870,6 @@ Remember you are speaking to an elderly person, so use clear, simple language an
     async def _enhanced_temperature_reasoning(self, message: str, elder_info: Dict = None) -> Dict[str, Any]:
         """Enhanced temperature reasoning with sensor reading and AI thinking"""
         try:
-            print(f"=== Enhanced Temperature Reasoning for: '{message}' ===")
             
             # Step 1: Automatically read current conditions (auto-callable functions)
             current_temp_data = await self._read_temperature_sensor()

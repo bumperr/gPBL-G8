@@ -53,7 +53,9 @@ class ArduinoSimulator:
     def on_message(self, client, userdata, msg):
         topic = msg.topic
         payload = msg.payload.decode()
-        print(f"Received {topic}: {payload}")
+        
+        # Only print when we receive a new input (command)
+        print(f"New command received - {topic}: {payload}")
 
         # Handle LED commands for each room (matching Arduino behavior)
         for room in self.led_status.keys():
@@ -100,32 +102,37 @@ class ArduinoSimulator:
 
         try:
             last_sensor_publish = 0
+            last_temp_display = 0
             last_status_update = 0
             
             print("\nArduino Simulator running...")
             print("LED Controls: Send ON/OFF to home/{room}/lights/cmd")
             print("Thermostat: Send 'temp,humidity' to home/room/data")
             print("DHT11 sensor data published every 5 seconds")
+            print("Temperature displayed every 20 seconds")
             print("Press Ctrl+C to stop\n")
             
             while True:
                 now = time.time()
 
-                # Publish realistic DHT11 sensor data every 5 seconds
+                # Publish realistic DHT11 sensor data every 5 seconds (quietly)
                 if now - last_sensor_publish > 5:
                     self.update_sensor_readings()
                     
                     # Format like Arduino: "temperature,humidity"
                     payload = f"{self.current_temp:.1f},{self.current_humidity:.1f}"
                     self.client.publish("home/dht11", payload)
-                    print(f"DHT11: {payload} (Target: {self.target_temp:.1f}C)")
                     last_sensor_publish = now
 
-                # Publish LED status updates periodically (every 15 seconds) to keep UI in sync
+                # Display temperature every 20 seconds
+                if now - last_temp_display > 20:
+                    print(f"Temperature: {self.current_temp:.1f}C, Humidity: {self.current_humidity:.1f}% (Target: {self.target_temp:.1f}C)")
+                    last_temp_display = now
+
+                # Publish LED status updates periodically (every 15 seconds) to keep UI in sync (quietly)
                 if now - last_status_update > 15:
                     for room, status in self.led_status.items():
                         self.client.publish(f"home/{room}/lights/status", status)
-                    print(f"Status sync: {self.led_status}")
                     last_status_update = now
 
                 time.sleep(0.5)  # More responsive to commands
