@@ -2,7 +2,7 @@
 
 A comprehensive eldercare solution integrating local LLMs with IoT for in-home monitoring, companionship, and remote care. The system features speech-to-text processing, smart home integration via MQTT, emergency detection, and caregiver dashboards.
 
-## 🌟 Features
+## Features
 
 ### Backend (FastAPI + Python)
 - **Speech-to-Text**: OpenAI Whisper
@@ -24,14 +24,14 @@ A comprehensive eldercare solution integrating local LLMs with IoT for in-home m
 - **MQTT Communication**: Structured topics for device control
 - **Arduino R4 WiFi**: IoT device control and sensor integration
 
-## 📋 Prerequisites
+## Prerequisites
 
 - **Python 3.8+** - For backend API
 - **Node.js 16+** - For frontend React app
 - **Ollama** - Local LLM runtime
 - **MQTT Broker** - Mosquitto or similar (optional but recommended)
 
-## 🚀 Quick Start
+##  Quick Start
 
 '''
 cd eldercare-app | npm run dev
@@ -54,4 +54,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-**🚀 Ready to help elders live independently with AI-powered assistance!**
+
